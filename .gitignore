@@ -1,0 +1,43 @@
+# ============================
+# Documentación y Contexto
+# ============================
+/wsDocs/
+!/**/README.md
+!/**/journey.md
+!/**/work-log.md
+!/**/00-START-HERE.md
+/wsDocs/images/
+
+# ============================
+# 💻 macOS y Windows
+# ============================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ============================
+# IDEs y editores
+# ============================
+# VSCode
+.vscode/
+.history/
+*.code-workspace
+
+# Xcode
+DerivedData/
+build/
+*.xcworkspace
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+
+# Android Studio / IntelliJ
+.idea/
+.gradle/
+local.properties
+*.iml
+build/
