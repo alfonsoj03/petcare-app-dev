@@ -16,14 +16,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.MedicalServices
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -38,6 +44,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.text.font.FontWeight
 
+enum class EventType { VACCINE, VET, OVERDUE }
+
 data class PetExtended(
     val id: String,
     val name: String,
@@ -45,7 +53,8 @@ data class PetExtended(
     val species: String,
     val ageYears: Int,
     val upToDate: Boolean,
-    val nextEvent: String
+    val nextEvent: String,
+    val eventType: EventType
 )
 
 @Composable
@@ -54,8 +63,9 @@ fun PetsScreen(
     onOpenPet: (String) -> Unit = {}
 ) {
     val sample = listOf(
-        PetExtended("1", "Buddy", "Golden Retriever", "Canine", 2, true, "Next vaccine: Oct 20"),
-        PetExtended("2", "Luna", "Mixed", "Canine", 4, false, "Next vet visit: Nov 02"),
+        PetExtended("1", "Max", "Golden Retriever", "Canine", 3, true, "Next: Vaccination - Dec 15", EventType.VACCINE),
+        PetExtended("2", "Luna", "Persian Cat", "Feline", 2, false, "Overdue: Deworming - Nov 20", EventType.OVERDUE),
+        PetExtended("3", "Buddy", "Beagle", "Canine", 1, true, "Next: Vet Visit - Jan 10", EventType.VET),
     )
     val selectedId = sample.first().id
 
@@ -64,24 +74,19 @@ fun PetsScreen(
             TopAppBar(
                 title = { Text("My Pets", style = MaterialTheme.typography.titleLarge) },
                 actions = {
-                    val sel = sample.firstOrNull { it.id == selectedId }
-                    if (sel != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(sel.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                                Text(sel.breed, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
-                            }
-                            Spacer(Modifier.width(6.dp))
-                            Image(
-                                painter = painterResource(id = R.drawable.foto_stock_perrito),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                        }
+                    // Green circular paw icon as in wireframe
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .size(28.dp)
+                            .background(Color(0xFF10B981), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Pets,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -140,7 +145,9 @@ private fun PetRowCard(
                 painter = painterResource(id = R.drawable.foto_stock_perrito),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(44.dp).clip(CircleShape)
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -151,14 +158,29 @@ private fun PetRowCard(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(pet.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("${pet.breed} • ${pet.ageYears}y", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                        Text("${pet.breed} • ${pet.ageYears} years", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                     }
                     StatusBadge(upToDate = pet.upToDate)
                 }
                 Spacer(Modifier.height(6.dp))
-                Text(pet.nextEvent, style = MaterialTheme.typography.bodyMedium)
+                EventRow(text = pet.nextEvent, type = pet.eventType)
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFF9CA3AF))
+        }
+        Spacer(Modifier.height(8.dp))
+        // Full-width green button like wireframe
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            androidx.compose.material3.Button(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.buttonColors(containerColor = Color(0xFF10B981), contentColor = Color.White),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Text("Edit Pet Info")
+            }
         }
     }
 }
@@ -177,5 +199,19 @@ private fun StatusBadge(upToDate: Boolean) {
         Box(modifier = Modifier.size(6.dp).background(dot, CircleShape))
         Spacer(Modifier.width(6.dp))
         Text(text, style = MaterialTheme.typography.labelMedium, color = dot)
+    }
+}
+
+@Composable
+private fun EventRow(text: String, type: EventType) {
+    val (icon, tint) = when (type) {
+        EventType.VACCINE -> Icons.Filled.MedicalServices to MaterialTheme.colorScheme.secondary
+        EventType.VET -> Icons.Filled.Event to MaterialTheme.colorScheme.secondary
+        EventType.OVERDUE -> Icons.Filled.WarningAmber to Color(0xFFEA580C)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }
