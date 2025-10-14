@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Pets
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Destinations(val route: String, val label: String, val icon: ImageVector) {
+    data object Login : Destinations("login", "Login", Icons.Filled.Pets)
     data object Dashboard : Destinations("dashboard", "Dashboard", Icons.Filled.Home)
     data object Health : Destinations("health", "Health", Icons.Filled.Favorite)
     data object Routine : Destinations("routine", "Routine", Icons.Filled.Schedule)

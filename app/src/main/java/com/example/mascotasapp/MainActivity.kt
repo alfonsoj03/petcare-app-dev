@@ -25,6 +25,7 @@ import com.example.mascotasapp.ui.screens.routine.RoutineScreen
 import com.example.mascotasapp.ui.screens.pets.PetsScreen
 import com.example.mascotasapp.ui.screens.pets.AddPetScreen
 import com.example.mascotasapp.ui.screens.pets.EditPetScreen
+import com.example.mascotasapp.ui.screens.login.LoginScreen
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.graphics.Color
@@ -51,35 +52,37 @@ fun AppRoot() {
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .background(Color.White)
-            ) {
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+            if (currentRoute != Destinations.Login.route) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .background(Color.White)
+                ) {
                     NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
-                    val navBackStackEntry by navController.currentBackStackEntryAsState()
-                    val currentRoute = navBackStackEntry?.destination?.route
-                    items.forEach { dest ->
-                        NavigationBarItem(
-                            selected = currentRoute == dest.route,
-                            onClick = {
-                                if (currentRoute != dest.route) {
-                                    navController.navigate(dest.route) {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                        items.forEach { dest ->
+                            NavigationBarItem(
+                                selected = currentRoute == dest.route,
+                                onClick = {
+                                    if (currentRoute != dest.route) {
+                                        navController.navigate(dest.route) {
+                                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
                                     }
-                                }
-                            },
-                            icon = { androidx.compose.material3.Icon(dest.icon, contentDescription = dest.label) },
-                            label = { androidx.compose.material3.Text(dest.label, style = MaterialTheme.typography.labelLarge) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.secondary,
-                                selectedTextColor = MaterialTheme.colorScheme.secondary,
-                                unselectedIconColor = Color(0xFF9CA3AF),
-                                unselectedTextColor = Color(0xFF9CA3AF),
-                                indicatorColor = Color.Transparent
+                                },
+                                icon = { androidx.compose.material3.Icon(dest.icon, contentDescription = dest.label) },
+                                label = { androidx.compose.material3.Text(dest.label, style = MaterialTheme.typography.labelLarge) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.secondary,
+                                    selectedTextColor = MaterialTheme.colorScheme.secondary,
+                                    unselectedIconColor = Color(0xFF9CA3AF),
+                                    unselectedTextColor = Color(0xFF9CA3AF),
+                                    indicatorColor = Color.Transparent
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -87,9 +90,19 @@ fun AppRoot() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Destinations.Dashboard.route,
+            startDestination = Destinations.Login.route,
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable(Destinations.Login.route) {
+                LoginScreen(
+                    onSignIn = {
+                        navController.navigate(Destinations.Dashboard.route) {
+                            popUpTo(Destinations.Login.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
             composable(Destinations.Dashboard.route) { DashboardScreen() }
             composable(Destinations.Health.route) { HealthScreen() }
             composable(Destinations.Pets.route) {

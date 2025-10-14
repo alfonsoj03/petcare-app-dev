@@ -5,6 +5,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -67,7 +71,7 @@ fun PetsScreen(
         PetExtended("2", "Luna", "Persian Cat", "Feline", 2, false, "Overdue: Deworming - Nov 20", EventType.OVERDUE),
         PetExtended("3", "Buddy", "Beagle", "Canine", 1, true, "Next: Vet Visit - Jan 10", EventType.VET),
     )
-    val selectedId = sample.first().id
+    var selectedId by remember { mutableStateOf(sample.first().id) }
 
     Scaffold(
         topBar = {
@@ -114,7 +118,8 @@ fun PetsScreen(
                 PetRowCard(
                     pet = pet,
                     selected = pet.id == selectedId,
-                    onClick = { onOpenPet(pet.id) }
+                    onSelect = { selectedId = pet.id },
+                    onEdit = { onOpenPet(pet.id) }
                 )
             }
             item { Spacer(Modifier.height(12.dp)) }
@@ -126,13 +131,17 @@ fun PetsScreen(
 private fun PetRowCard(
     pet: PetExtended,
     selected: Boolean,
-    onClick: () -> Unit
+    onSelect: () -> Unit,
+    onEdit: () -> Unit
 ) {
     Card(
-        onClick = onClick,
+        onClick = onSelect,
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(if (selected) 2.dp else 1.dp, MaterialTheme.colorScheme.secondary),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(
+            if (selected) 2.dp else 1.dp,
+            if (selected) MaterialTheme.colorScheme.secondary else Color(0xFFF3F4F6)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 0.dp else 1.dp),
         shape = MaterialTheme.shapes.large
     ) {
         Row(
@@ -171,7 +180,7 @@ private fun PetRowCard(
                 .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
             androidx.compose.material3.ElevatedButton(
-                onClick = onClick,
+                onClick = onEdit,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp),
