@@ -162,13 +162,9 @@ private fun PetRowCard(
                     }
                     StatusBadge(upToDate = pet.upToDate)
                 }
-                Spacer(Modifier.height(4.dp))
                 EventRow(text = pet.nextEvent, type = pet.eventType)
             }
         }
-        Spacer(Modifier.height(4.dp))
-        // Full-width green button like wireframe
-// Reemplaza el bloque actual del botón por este
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -178,21 +174,21 @@ private fun PetRowCard(
                 onClick = onClick,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp), // alto como en la segunda imagen
-                shape = RoundedCornerShape(12.dp), // bordes más redondeados
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp),
                 elevation = androidx.compose.material3.ButtonDefaults.elevatedButtonElevation(
-                    defaultElevation = 2.dp, // sutil sombra
+                    defaultElevation = 2.dp,
                     pressedElevation = 4.dp
                 ),
                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF34D399), // verde un poco más claro (look 2)
+                    containerColor = Color(0xFF34D399),
                     contentColor = Color.White
                 ),
                 contentPadding = PaddingValues(horizontal = 20.dp) // respira más
             ) {
                 Text(
                     "Edit Pet Info",
-                    style = MaterialTheme.typography.titleSmall, // texto un poquito más “fuerte”
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium
                 )
             }
