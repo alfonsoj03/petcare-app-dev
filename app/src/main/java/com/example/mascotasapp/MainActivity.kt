@@ -22,17 +22,17 @@ import com.example.mascotasapp.ui.navigation.Destinations
 import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
 import com.example.mascotasapp.ui.screens.health.HealthScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineScreen
+import com.example.mascotasapp.ui.screens.pets.PetsScreen
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContent {
             MascotasAppTheme {
                 AppRoot()
@@ -47,14 +47,13 @@ fun AppRoot() {
     val items = Destinations.bottomItems
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            Surface(
-                color = Color.White,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp,
-                border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .background(Color.White)
             ) {
-                NavigationBar(containerColor = Color.Transparent) {
+                    NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
                     items.forEach { dest ->
@@ -91,6 +90,7 @@ fun AppRoot() {
         ) {
             composable(Destinations.Dashboard.route) { DashboardScreen() }
             composable(Destinations.Health.route) { HealthScreen() }
+            composable(Destinations.Pets.route) { PetsScreen() }
             composable(Destinations.Routine.route) { RoutineScreen() }
         }
     }

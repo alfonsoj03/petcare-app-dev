@@ -18,7 +18,7 @@ private val NunitoVF = FontFamily(
         resId = R.font.nunito_variable,
         // Default axis value; per-style weight will further influence rendering
         variationSettings = FontVariation.Settings(
-            FontVariation.Setting("wght", 600f)
+            FontVariation.Setting("wght", 700f)
         )
     )
 )

@@ -51,19 +51,19 @@
 
 **Tasks:**
 
-- [ ]  Create `DashboardFragment.kt`.
-- [ ]  Display pet photo, name, and species.
-- [ ]  Add cards:
-    - [ ]  Next vaccine.
-    - [ ]  Next vet visit.
-    - [ ]  Next routine task.
-- [ ]  Add “Quick Action” buttons (Register Bath, Visit, Feeding).
-- [ ]  Add event history preview (last 3 actions).
-- [ ]  Connect navigation to Health & Routine views.
+- [x]  Create `DashboardFragment.kt`.
+- [x]  Display pet photo, name, and species.
+- [x]  Add cards:
+    - [x]  Next vaccine.
+    - [x]  Next vet visit.
+    - [x]  Next routine task.
+- [x]  Add “Quick Action” buttons (Register Bath, Visit, Feeding).
+- [x]  Add event history preview (last 3 actions).
+- [x]  Connect navigation to Health, Pets & Routine views.
 
 **Wireframe:**
 
-📸 `/wsDocs/wireframes/dashboard.png`
+📸 `/wireframes/dashboard.png`
 
 ---
 
@@ -85,11 +85,11 @@
 
 **Wireframes:**
 
-📸 `/wsDocs/wireframes/my_pets.png`
+📸 `/wireframes/my_pets.png`
 
-📸 `/wsDocs/wireframes/add_pet.png`
+📸 `/wireframes/add_pet.png`
 
-📸 `/wsDocs/wireframes/edit_pet.png`
+📸 `/wireframes/edit_pet.png`
 
 ---
 
@@ -112,7 +112,7 @@
 
 **Wireframe:**
 
-📸 `/wsDocs/wireframes/routine.png`
+📸 `/wireframes/routine.png`
 
 ---
 
@@ -138,7 +138,7 @@
 
 **Wireframe:**
 
-📸 `/wsDocs/wireframes/health.png`
+📸 `/wireframes/health.png`
 
 ---
 
@@ -157,7 +157,7 @@
 
 **Wireframe:**
 
-📸 `/wsDocs/wireframes/profile.png`
+📸 `/wireframes/profile.png`
 
 ---
 

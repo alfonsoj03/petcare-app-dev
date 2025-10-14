@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Vaccines
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.Color
@@ -30,6 +32,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.res.painterResource
+import com.example.mascotasapp.R
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 
 @Composable
 fun DashboardScreen(
@@ -37,29 +47,46 @@ fun DashboardScreen(
     onOpenRoutine: () -> Unit = {},
     onRegisterBath: () -> Unit = {},
     onRegisterVisit: () -> Unit = {},
-    onRegisterFeeding: () -> Unit = {}
+    onRegisterFeeding: () -> Unit = {},
+    onOpenPetProfile: () -> Unit = {}
 ) {
-    val petName = "Luna"
-    val petSpecies = "Canine"
-
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("PetCare", style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Pets,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+            Surface(color = Color.White, tonalElevation = 0.dp, shadowElevation = 0.dp) {
+                TopAppBar(
+                    title = { Text("PetCare", style = MaterialTheme.typography.titleLarge) },
+                    navigationIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Pets,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    },
+                    actions = {
+                        IconButton(onClick = { /* TODO: notifications */ }, modifier = Modifier.padding(end = 1.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsNone,
+                                contentDescription = "Notifications"
+                            )
+                        }
+                        IconButton(onClick = { /* TODO: more */ }, modifier = Modifier.padding(end = 1.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.White,
+                        scrolledContainerColor = Color.White
+                    ),
+                    modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
                 )
-            )
+            }
         },
-        containerColor = Color(0xFFF9FAFB)
+        containerColor = Color(0xFFF9FAFB),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -80,8 +107,8 @@ private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primary)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(
-                    model = "https://placekitten.com/200/200",
+                Image(
+                    painter = painterResource(id = R.drawable.foto_stock_perrito),
                     contentDescription = "Pet avatar",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -138,7 +165,7 @@ private fun InfoRowCard(title: String, subtitle: String, icon: androidx.compose.
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Color.White)
             }
         }
