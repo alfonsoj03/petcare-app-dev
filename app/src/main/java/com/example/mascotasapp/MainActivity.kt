@@ -19,6 +19,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.mascotasapp.ui.theme.MascotasAppTheme
 import com.example.mascotasapp.ui.navigation.Destinations
+import com.example.mascotasapp.ui.screens.splash.SplashScreen
 import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
 import com.example.mascotasapp.ui.screens.health.HealthScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineScreen
@@ -54,7 +55,7 @@ fun AppRoot() {
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
-            if (currentRoute != Destinations.Login.route) {
+            if (currentRoute != Destinations.Login.route && currentRoute != Destinations.Splash.route) {
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .background(Color.White)
@@ -90,9 +91,17 @@ fun AppRoot() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Destinations.Login.route,
+            startDestination = Destinations.Splash.route,
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable(Destinations.Splash.route) {
+                SplashScreen(onFinished = {
+                    navController.navigate(Destinations.Login.route) {
+                        popUpTo(Destinations.Splash.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                })
+            }
             composable(Destinations.Login.route) {
                 LoginScreen(
                     onSignIn = {
