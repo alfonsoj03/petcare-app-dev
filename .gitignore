@@ -1,12 +1,10 @@
 # ============================
 # Documentación y Contexto
 # ============================
-/wsDocs/
 !/**/README.md
-!/**/journey.md
-!/**/work-log.md
+!/**/01-JOURNEY.md
+!/**/02-WORKLOG.md
 !/**/00-START-HERE.md
-/wsDocs/images/
 
 # ============================
 # 💻 macOS y Windows

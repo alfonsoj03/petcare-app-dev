@@ -6,12 +6,28 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.example.mascotasapp.ui.theme.MascotasAppTheme
+import com.example.mascotasapp.ui.navigation.Destinations
+import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
+import com.example.mascotasapp.ui.screens.health.HealthScreen
+import com.example.mascotasapp.ui.screens.routine.RoutineScreen
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,29 +35,71 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MascotasAppTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                AppRoot()
             }
         }
     }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
+fun AppRoot() {
+    val navController = rememberNavController()
+    val items = Destinations.bottomItems
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            Surface(
+                color = Color.White,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+                border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+            ) {
+                NavigationBar(containerColor = Color.Transparent) {
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = navBackStackEntry?.destination?.route
+                    items.forEach { dest ->
+                        NavigationBarItem(
+                            selected = currentRoute == dest.route,
+                            onClick = {
+                                if (currentRoute != dest.route) {
+                                    navController.navigate(dest.route) {
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = { androidx.compose.material3.Icon(dest.icon, contentDescription = dest.label) },
+                            label = { androidx.compose.material3.Text(dest.label, style = MaterialTheme.typography.labelLarge) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.secondary,
+                                selectedTextColor = MaterialTheme.colorScheme.secondary,
+                                unselectedIconColor = Color(0xFF9CA3AF),
+                                unselectedTextColor = Color(0xFF9CA3AF),
+                                indicatorColor = Color.Transparent
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Destinations.Dashboard.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable(Destinations.Dashboard.route) { DashboardScreen() }
+            composable(Destinations.Health.route) { HealthScreen() }
+            composable(Destinations.Routine.route) { RoutineScreen() }
+        }
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
     MascotasAppTheme {
-        Greeting("Android")
+        AppRoot()
     }
 }
