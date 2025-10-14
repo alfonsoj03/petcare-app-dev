@@ -23,6 +23,8 @@ import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
 import com.example.mascotasapp.ui.screens.health.HealthScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineScreen
 import com.example.mascotasapp.ui.screens.pets.PetsScreen
+import com.example.mascotasapp.ui.screens.pets.AddPetScreen
+import com.example.mascotasapp.ui.screens.pets.EditPetScreen
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.graphics.Color
@@ -90,7 +92,17 @@ fun AppRoot() {
         ) {
             composable(Destinations.Dashboard.route) { DashboardScreen() }
             composable(Destinations.Health.route) { HealthScreen() }
-            composable(Destinations.Pets.route) { PetsScreen() }
+            composable(Destinations.Pets.route) {
+                PetsScreen(
+                    onAddPet = { navController.navigate(Destinations.AddPet.route) },
+                    onOpenPet = { id -> navController.navigate(Destinations.EditPet.routeFor(id)) }
+                )
+            }
+            composable(Destinations.AddPet.route) { AddPetScreen() }
+            composable(Destinations.EditPet.route) { backStack ->
+                val petId = backStack.arguments?.getString(Destinations.EditPet.ArgPetId) ?: ""
+                EditPetScreen(petId)
+            }
             composable(Destinations.Routine.route) { RoutineScreen() }
         }
     }
