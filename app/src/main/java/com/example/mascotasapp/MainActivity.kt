@@ -98,10 +98,10 @@ fun AppRoot() {
                     onOpenPet = { id -> navController.navigate(Destinations.EditPet.routeFor(id)) }
                 )
             }
-            composable(Destinations.AddPet.route) { AddPetScreen() }
+            composable(Destinations.AddPet.route) { AddPetScreen(onBack = { navController.navigateUp() }) }
             composable(Destinations.EditPet.route) { backStack ->
                 val petId = backStack.arguments?.getString(Destinations.EditPet.ArgPetId) ?: ""
-                EditPetScreen(petId)
+                EditPetScreen(petId, onBack = { navController.navigateUp() })
             }
             composable(Destinations.Routine.route) { RoutineScreen() }
         }
