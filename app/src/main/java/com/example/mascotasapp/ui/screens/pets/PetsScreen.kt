@@ -138,7 +138,7 @@ private fun PetRowCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(top = 12.dp, end = 12.dp, start = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
@@ -168,7 +168,7 @@ private fun PetRowCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
             androidx.compose.material3.ElevatedButton(
                 onClick = onClick,
