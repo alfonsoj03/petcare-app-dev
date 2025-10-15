@@ -20,21 +20,50 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material3.Icon
+import androidx.compose.ui.unit.dp
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Image
 import kotlinx.coroutines.delay
-import com.example.mascotasapp.R
 
 @Composable
-fun SplashScreen(onFinished: () -> Unit) {
+fun SplashScreen(
+    onFinished: () -> Unit,
+    @DrawableRes topDecorationResId: Int? = null,
+    @DrawableRes bottomDecorationResId: Int? = null
+) {
     LaunchedEffect(Unit) {
         delay(1500)
         onFinished()
     }
     Surface(color = Color.White) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Top decoration (nullable to avoid compile-time resource requirement)
+            if (topDecorationResId != null) {
+                Image(
+                    painter = painterResource(id = topDecorationResId),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                )
+            }
+
+            // Bottom decoration (nullable)
+            if (bottomDecorationResId != null) {
+                Image(
+                    painter = painterResource(id = bottomDecorationResId),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                )
+            }
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -49,10 +78,10 @@ fun SplashScreen(onFinished: () -> Unit) {
                         .background(Color(0xFF10B981)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_pet),
+                    Icon(
+                        imageVector = Icons.Filled.Pets,
                         contentDescription = null,
-                        contentScale = ContentScale.Fit,
+                        tint = Color.White,
                         modifier = Modifier.size(48.dp)
                     )
                 }
