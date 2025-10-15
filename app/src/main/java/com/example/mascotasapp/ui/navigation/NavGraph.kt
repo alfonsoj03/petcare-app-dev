@@ -14,6 +14,7 @@ sealed class Destinations(val route: String, val label: String, val icon: ImageV
     data object Health : Destinations("health", "Health", Icons.Filled.Favorite)
     data object Routine : Destinations("routine", "Routine", Icons.Filled.Schedule)
     data object Pets : Destinations("pets", "Pets", Icons.Filled.Pets)
+    data object Profile : Destinations("profile", "Profile", Icons.Filled.Pets)
     data object AddPet : Destinations("pets/add", "Add Pet", Icons.Filled.Pets)
     data object EditPet : Destinations("pets/edit/{petId}", "Edit Pet", Icons.Filled.Pets) {
         const val ArgPetId = "petId"

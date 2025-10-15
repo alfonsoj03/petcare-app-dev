@@ -1,0 +1,136 @@
+package com.example.mascotasapp.ui.screens.profile
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.example.mascotasapp.R
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileScreen(onBack: () -> Unit = {}) {
+    val bgSurface = Color(0xFFF9FAFB)
+    val accent = Color(0xFF8B5CF6)
+    val green = Color(0xFF10B981)
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Profile", style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null) }
+                },
+                actions = {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(green),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Notifications, // just a small badge icon
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.White,
+                    scrolledContainerColor = Color.White
+                ),
+                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
+            )
+        },
+        containerColor = bgSurface,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { inner ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(inner)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Avatar
+            Image(
+                painter = painterResource(id = R.drawable.foto_stock_perrito),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(88.dp)
+                    .clip(CircleShape)
+            )
+            Text("Sarah Johnson", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("sarah.johnson@email.com", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
+            Button(
+                onClick = { /* edit profile */ },
+                colors = ButtonDefaults.buttonColors(containerColor = green, contentColor = Color.White),
+                shape = RoundedCornerShape(20.dp)
+            ) { Text("Edit Profile") }
+
+            // Cards list
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                SettingRow(title = "Notifications", subtitle = "Manage your alerts", icon = Icons.Filled.Notifications)
+                SettingRow(title = "Privacy & Security", subtitle = "Control your data", icon = Icons.Filled.Lock)
+                SettingRow(title = "About", subtitle = "App info & support", icon = Icons.Filled.Info)
+            }
+
+            // Sign out
+            OutlinedButton(
+                onClick = { /* sign out */ },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp, brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFE5E7EB)))
+            ) { Text("Sign Out") }
+
+            Spacer(Modifier.height(8.dp))
+            Text("Version 2.1.0", style = MaterialTheme.typography.labelMedium, color = Color(0xFF9CA3AF), textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun SettingRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(color = Color(0xFFF3F4F6), shape = CircleShape) {
+                Icon(icon, contentDescription = null, tint = Color(0xFF6B7280), modifier = Modifier.padding(10.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B7280))
+            }
+            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = null, tint = Color.Transparent) // spacer
+        }
+    }
+}

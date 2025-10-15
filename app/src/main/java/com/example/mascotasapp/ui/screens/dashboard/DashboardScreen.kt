@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +50,8 @@ fun DashboardScreen(
     onRegisterBath: () -> Unit = {},
     onRegisterVisit: () -> Unit = {},
     onRegisterFeeding: () -> Unit = {},
-    onOpenPetProfile: () -> Unit = {}
+    onOpenPetProfile: () -> Unit = {},
+    onOpenProfile: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -64,17 +67,29 @@ fun DashboardScreen(
                         )
                     },
                     actions = {
-                        IconButton(onClick = { /* TODO: notifications */ }, modifier = Modifier.padding(end = 1.dp)) {
+                        val showMenu = remember { mutableStateOf(false) }
+                        IconButton(onClick = { /* notifications */ }, modifier = Modifier.padding(end = 1.dp)) {
                             Icon(
                                 imageVector = Icons.Default.NotificationsNone,
                                 contentDescription = "Notifications"
                             )
                         }
-                        IconButton(onClick = { /* TODO: more */ }, modifier = Modifier.padding(end = 1.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More options"
-                            )
+                        Box {
+                            IconButton(onClick = { showMenu.value = true }, modifier = Modifier.padding(end = 1.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More options"
+                                )
+                            }
+                            DropdownMenu(expanded = showMenu.value, onDismissRequest = { showMenu.value = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Profile") },
+                                    onClick = {
+                                        showMenu.value = false
+                                        onOpenProfile()
+                                    }
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(

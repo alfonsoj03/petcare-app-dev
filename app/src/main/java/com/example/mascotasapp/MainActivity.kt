@@ -22,6 +22,7 @@ import com.example.mascotasapp.ui.navigation.Destinations
 import com.example.mascotasapp.ui.screens.splash.SplashScreen
 import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
 import com.example.mascotasapp.ui.screens.health.HealthScreen
+import com.example.mascotasapp.ui.screens.profile.ProfileScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineScreen
 import com.example.mascotasapp.ui.screens.pets.PetsScreen
 import com.example.mascotasapp.ui.screens.pets.AddPetScreen
@@ -112,7 +113,11 @@ fun AppRoot() {
                     }
                 )
             }
-            composable(Destinations.Dashboard.route) { DashboardScreen() }
+            composable(Destinations.Dashboard.route) {
+                DashboardScreen(
+                    onOpenProfile = { navController.navigate(Destinations.Profile.route) }
+                )
+            }
             composable(Destinations.Health.route) { HealthScreen() }
             composable(Destinations.Pets.route) {
                 PetsScreen(
@@ -126,6 +131,7 @@ fun AppRoot() {
                 EditPetScreen(petId, onBack = { navController.navigateUp() })
             }
             composable(Destinations.Routine.route) { RoutineScreen() }
+            composable(Destinations.Profile.route) { ProfileScreen(onBack = { navController.navigateUp() }) }
         }
     }
 }
