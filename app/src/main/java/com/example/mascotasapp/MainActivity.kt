@@ -27,6 +27,8 @@ import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
 import com.example.mascotasapp.ui.screens.health.HealthScreen
 import com.example.mascotasapp.ui.screens.profile.ProfileScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineScreen
+import com.example.mascotasapp.ui.screens.routine.RoutineCareFormScreen
+import com.example.mascotasapp.ui.screens.routine.MedicationFormScreen
 import com.example.mascotasapp.ui.screens.pets.PetsScreen
 import com.example.mascotasapp.ui.screens.pets.AddPetScreen
 import com.example.mascotasapp.ui.screens.pets.EditPetScreen
@@ -70,7 +72,14 @@ fun AppRoot() {
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
-            if (currentRoute != Destinations.Login.route && currentRoute != Destinations.Splash.route) {
+            if (
+                currentRoute != Destinations.Login.route &&
+                currentRoute != Destinations.Splash.route &&
+                currentRoute != Destinations.RoutineAdd.route &&
+                currentRoute != Destinations.RoutineEdit.route &&
+                currentRoute != Destinations.MedicationAdd.route &&
+                currentRoute != Destinations.MedicationEdit.route
+            ) {
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .background(Color.White)
@@ -140,6 +149,28 @@ fun AppRoot() {
                     }
                 )
             }
+            composable(Destinations.MedicationAdd.route) {
+                MedicationFormScreen(
+                    title = "Add Medication",
+                    confirmButtonText = "+ Add Medication",
+                    onConfirm = { navController.navigateUp() },
+                    onBack = { navController.navigateUp() }
+                )
+            }
+            composable(Destinations.MedicationEdit.route) { backStack ->
+                val itemId = backStack.arguments?.getString(com.example.mascotasapp.ui.navigation.Destinations.MedicationEdit.ArgItemId) ?: ""
+                MedicationFormScreen(
+                    title = "Edit Medication",
+                    confirmButtonText = "Save changes",
+                    initialName = when (itemId) {
+                        "heartgard_plus" -> "Heartgard Plus"
+                        "apoquel" -> "Apoquel"
+                        else -> "Medication"
+                    },
+                    onConfirm = { navController.navigateUp() },
+                    onBack = { navController.navigateUp() }
+                )
+            }
             composable(Destinations.Dashboard.route) {
                 DashboardScreen(
                     onOpenProfile = { navController.navigate(Destinations.Profile.route) }
@@ -162,7 +193,40 @@ fun AppRoot() {
                 val petId = backStack.arguments?.getString(Destinations.EditPet.ArgPetId) ?: ""
                 EditPetScreen(petId, onBack = { navController.navigateUp() })
             }
-            composable(Destinations.Routine.route) { RoutineScreen() }
+            composable(Destinations.Routine.route) {
+                RoutineScreen(
+                    onAddCustom = { navController.navigate(Destinations.RoutineAdd.route) },
+                    onAddMedication = { navController.navigate(Destinations.MedicationAdd.route) },
+                    onEditItem = { itemId -> navController.navigate(Destinations.RoutineEdit.routeFor(itemId)) },
+                    onEditMedication = { itemId -> navController.navigate(Destinations.MedicationEdit.routeFor(itemId)) }
+                )
+            }
+            composable(Destinations.RoutineAdd.route) {
+                RoutineCareFormScreen(
+                    title = "Add Routine Care",
+                    confirmButtonText = "+ Add Routine Care",
+                    onConfirm = { navController.navigateUp() },
+                    onBack = { navController.navigateUp() }
+                )
+            }
+            composable(Destinations.RoutineEdit.route) { backStack ->
+                val itemId = backStack.arguments?.getString(com.example.mascotasapp.ui.navigation.Destinations.RoutineEdit.ArgItemId) ?: ""
+                RoutineCareFormScreen(
+                    title = "Edit Routine Care",
+                    confirmButtonText = "Save changes",
+                    initialName = when (itemId) {
+                        "feeding" -> "Feeding"
+                        "dental" -> "Dental Care"
+                        "bath" -> "Bath"
+                        else -> "Custom Care"
+                    },
+                    initialDateTime = "",
+                    initialEveryValue = "",
+                    initialEveryUnit = "hours",
+                    onConfirm = { navController.navigateUp() },
+                    onBack = { navController.navigateUp() }
+                )
+            }
             composable(Destinations.Profile.route) { ProfileScreen(onBack = { navController.navigateUp() }) }
         }
     }

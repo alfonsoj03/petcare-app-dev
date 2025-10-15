@@ -13,6 +13,16 @@ sealed class Destinations(val route: String, val label: String, val icon: ImageV
     data object Dashboard : Destinations("dashboard", "Home", Icons.Filled.Home)
     data object Health : Destinations("health", "Health", Icons.Filled.Favorite)
     data object Routine : Destinations("routine", "Routine", Icons.Filled.Schedule)
+    data object RoutineAdd : Destinations("routine/add", "Add Routine Care", Icons.Filled.Schedule)
+    data object RoutineEdit : Destinations("routine/edit/{itemId}", "Edit Routine Care", Icons.Filled.Schedule) {
+        const val ArgItemId = "itemId"
+        fun routeFor(itemId: String) = "routine/edit/$itemId"
+    }
+    data object MedicationAdd : Destinations("medication/add", "Add Medication", Icons.Filled.Schedule)
+    data object MedicationEdit : Destinations("medication/edit/{itemId}", "Edit Medication", Icons.Filled.Schedule) {
+        const val ArgItemId = "itemId"
+        fun routeFor(itemId: String) = "medication/edit/$itemId"
+    }
     data object Pets : Destinations("pets", "Pets", Icons.Filled.Pets)
     data object Profile : Destinations("profile", "Profile", Icons.Filled.Pets)
     data object AddPet : Destinations("pets/add", "Add Pet", Icons.Filled.Pets)

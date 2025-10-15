@@ -31,7 +31,8 @@ fun RoutineScreen(
     onAddCustom: () -> Unit = {},
     onAddMedication: () -> Unit = {},
     onMarkDone: (String) -> Unit = {},
-    onEditItem: (String) -> Unit = {}
+    onEditItem: (String) -> Unit = {},
+    onEditMedication: (String) -> Unit = {}
 ) {
     // Palette
     val bgSurface = Color(0xFFF9FAFB)
@@ -86,7 +87,7 @@ fun RoutineScreen(
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Routine care", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    Text("Routines", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     AssistChip(
                         onClick = onAddCustom,
                         label = { Text("+ Add Custom") },
@@ -149,7 +150,8 @@ fun RoutineScreen(
                     start = "Oct 1, 2024",
                     end = "Oct 1, 2025",
                     nextDose = "Dec 1, 2024",
-                    onEdit = { onEditItem("heartgard_plus") }
+                    onMarkDone = { onMarkDone("heartgard_plus") },
+                    onEdit = { onEditMedication("heartgard_plus") }
                 )
             }
             item {
@@ -160,7 +162,8 @@ fun RoutineScreen(
                     start = "Nov 15, 2024",
                     end = "Dec 15, 2024",
                     nextDose = "Today, 6:00 PM",
-                    onEdit = { onEditItem("apoquel") }
+                    onMarkDone = { onMarkDone("apoquel") },
+                    onEdit = { onEditMedication("apoquel") }
                 )
             }
             item { Spacer(Modifier.height(8.dp)) }
@@ -250,6 +253,7 @@ private fun MedicationCard(
     start: String,
     end: String,
     nextDose: String,
+    onMarkDone: () -> Unit,
     onEdit: () -> Unit
 ) {
     Card(
@@ -300,10 +304,28 @@ private fun MedicationCard(
                     Text(end, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Next dose: $nextDose", style = MaterialTheme.typography.bodySmall, color = Color.Black, modifier = Modifier.weight(1f))
-                TextButton(onClick = onEdit, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF10B981))) { Text("Edit") }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onMarkDone,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF33C59D), contentColor = Color.White),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                ) { Text("Mark as done") }
+                FilledTonalButton(
+                    onClick = onEdit,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = Color(0xFFF3F4F6),
+                        contentColor = Color.Black
+                    )
+                ) { Text("Edit") }
             }
+            Text("Next dose: $nextDose", style = MaterialTheme.typography.bodySmall, color = Color.Black)
         }
     }
 }
