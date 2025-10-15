@@ -59,20 +59,23 @@ data class PetExtended(
     val ageYears: Int,
     val upToDate: Boolean,
     val nextEvent: String,
-    val eventType: EventType
+    val eventType: EventType,
+    val imageRes: Int = R.drawable.foto_stock_perrito
 )
 
 @Composable
 fun PetsScreen(
     onAddPet: () -> Unit = {},
-    onOpenPet: (String) -> Unit = {}
+    onOpenPet: (String) -> Unit = {},
+    selectedPetId: String? = null,
+    onSelectedPet: (PetExtended) -> Unit = {}
 ) {
     val sample = listOf(
         PetExtended("1", "Max", "Golden Retriever", "Canine", 3, true, "Next: Vaccination - Dec 15", EventType.VACCINE),
         PetExtended("2", "Luna", "Persian Cat", "Feline", 2, false, "Overdue: Deworming - Nov 20", EventType.OVERDUE),
         PetExtended("3", "Buddy", "Beagle", "Canine", 1, true, "Next: Vet Visit - Jan 10", EventType.VET),
     )
-    var selectedId by remember { mutableStateOf(sample.first().id) }
+    var selectedId by remember { mutableStateOf(selectedPetId ?: sample.first().id) }
 
     Scaffold(
         topBar = {
@@ -120,7 +123,10 @@ fun PetsScreen(
                 PetRowCard(
                     pet = pet,
                     selected = pet.id == selectedId,
-                    onSelect = { selectedId = pet.id },
+                    onSelect = {
+                        selectedId = pet.id
+                        onSelectedPet(pet)
+                    },
                     onEdit = { onOpenPet(pet.id) }
                 )
             }

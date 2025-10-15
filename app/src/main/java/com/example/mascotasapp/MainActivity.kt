@@ -11,6 +11,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.NavHost
@@ -33,8 +36,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.mascotasapp.R
+// removed ripple/clickable customizations
+import androidx.compose.foundation.layout.size
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +63,8 @@ class MainActivity : ComponentActivity() {
 fun AppRoot() {
     val navController = rememberNavController()
     val items = Destinations.bottomItems
+    var selectedPetId by remember { mutableStateOf<String?>(null) }
+    var selectedPetImageRes by remember { mutableStateOf(R.drawable.foto_stock_perrito) }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -75,7 +89,20 @@ fun AppRoot() {
                                         }
                                     }
                                 },
-                                icon = { androidx.compose.material3.Icon(dest.icon, contentDescription = dest.label) },
+                                icon = {
+                                    if (dest == Destinations.Pets) {
+                                        Image(
+                                            painter = painterResource(id = selectedPetImageRes),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                        )
+                                    } else {
+                                        androidx.compose.material3.Icon(dest.icon, contentDescription = dest.label)
+                                    }
+                                },
                                 label = { androidx.compose.material3.Text(dest.label, style = MaterialTheme.typography.labelLarge) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = MaterialTheme.colorScheme.secondary,
@@ -127,7 +154,12 @@ fun AppRoot() {
             composable(Destinations.Pets.route) {
                 PetsScreen(
                     onAddPet = { navController.navigate(Destinations.AddPet.route) },
-                    onOpenPet = { id -> navController.navigate(Destinations.EditPet.routeFor(id)) }
+                    onOpenPet = { id -> navController.navigate(Destinations.EditPet.routeFor(id)) },
+                    selectedPetId = selectedPetId,
+                    onSelectedPet = { pet ->
+                        selectedPetId = pet.id
+                        selectedPetImageRes = pet.imageRes
+                    }
                 )
             }
             composable(Destinations.AddPet.route) { AddPetScreen(onBack = { navController.navigateUp() }) }
