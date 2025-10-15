@@ -20,6 +20,7 @@ sealed class Destinations(val route: String, val label: String, val icon: ImageV
         const val ArgPetId = "petId"
         fun routeFor(petId: String) = "pets/edit/$petId"
     }
+    data object AddVisit : Destinations("health/addvisit", "Add Visit", Icons.Filled.Favorite)
 
     companion object {
         val bottomItems = listOf(Dashboard, Health, Pets, Routine)
