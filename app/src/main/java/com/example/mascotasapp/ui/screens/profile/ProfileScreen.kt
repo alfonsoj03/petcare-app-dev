@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -90,9 +91,28 @@ fun ProfileScreen(onBack: () -> Unit = {}) {
 
             // Cards list
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                SettingRow(title = "Notifications", subtitle = "Manage your alerts", icon = Icons.Filled.Notifications)
-                SettingRow(title = "Privacy & Security", subtitle = "Control your data", icon = Icons.Filled.Lock)
-                SettingRow(title = "About", subtitle = "App info & support", icon = Icons.Filled.Info)
+                SettingRow(
+                    title = "Notifications",
+                    subtitle = "Manage your alerts",
+                    icon = Icons.Filled.Notifications,
+                    bgColor = Color(0xFFFEF3C7), // soft orange
+                    iconTint = Color(0xFFF59E0B),
+                    showDot = true
+                )
+                SettingRow(
+                    title = "Privacy & Security",
+                    subtitle = "Control your data",
+                    icon = Icons.Filled.Lock,
+                    bgColor = Color(0xFFDCFCE7), // soft green
+                    iconTint = Color(0xFF16A34A)
+                )
+                SettingRow(
+                    title = "About",
+                    subtitle = "App info & support",
+                    icon = Icons.Filled.Info,
+                    bgColor = Color(0xFFDBEAFE), // soft blue
+                    iconTint = Color(0xFF3B82F6)
+                )
             }
 
             // Sign out
@@ -110,7 +130,14 @@ fun ProfileScreen(onBack: () -> Unit = {}) {
 }
 
 @Composable
-private fun SettingRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+private fun SettingRow(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    bgColor: Color,
+    iconTint: Color,
+    showDot: Boolean = false
+) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -122,15 +149,25 @@ private fun SettingRow(title: String, subtitle: String, icon: androidx.compose.u
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(color = Color(0xFFF3F4F6), shape = CircleShape) {
-                Icon(icon, contentDescription = null, tint = Color(0xFF6B7280), modifier = Modifier.padding(10.dp))
+            Surface(color = bgColor, shape = CircleShape) {
+                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.padding(10.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B7280))
             }
-            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = null, tint = Color.Transparent) // spacer
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (showDot) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFEF4444))
+                    )
+                }
+                Icon(imageVector = Icons.Filled.ChevronRight, contentDescription = null, tint = Color(0xFF9CA3AF))
+            }
         }
     }
 }
