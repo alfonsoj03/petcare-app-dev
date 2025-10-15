@@ -25,6 +25,7 @@ import com.example.mascotasapp.ui.navigation.Destinations
 import com.example.mascotasapp.ui.screens.splash.SplashScreen
 import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
 import com.example.mascotasapp.ui.screens.health.HealthScreen
+import com.example.mascotasapp.ui.screens.health.AddVisitScreen
 import com.example.mascotasapp.ui.screens.profile.ProfileScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineCareFormScreen
@@ -176,7 +177,11 @@ fun AppRoot() {
                     onOpenProfile = { navController.navigate(Destinations.Profile.route) }
                 )
             }
-            composable(Destinations.Health.route) { HealthScreen() }
+            composable(Destinations.Health.route) {
+                HealthScreen(
+                    onAddExtraVisit = { navController.navigate(Destinations.AddVisit.route) }
+                )
+            }
             composable(Destinations.Pets.route) {
                 PetsScreen(
                     onAddPet = { navController.navigate(Destinations.AddPet.route) },
@@ -228,6 +233,13 @@ fun AppRoot() {
                 )
             }
             composable(Destinations.Profile.route) { ProfileScreen(onBack = { navController.navigateUp() }) }
+            composable(Destinations.AddVisit.route) {
+                AddVisitScreen(
+                    onBack = { navController.navigateUp() },
+                    onSave = { _,_,_,_,_,_ -> navController.navigateUp() },
+                    onCancel = { navController.navigateUp() }
+                )
+            }
         }
     }
 }

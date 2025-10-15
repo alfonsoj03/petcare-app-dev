@@ -32,6 +32,7 @@ fun HealthScreen(
     onBack: (() -> Unit)? = null,
     onViewAll: () -> Unit = {},
     onReschedule: () -> Unit = {},
+    onMarkAsDone: () -> Unit = {},
     onViewDetails: (String) -> Unit = {},
     onAddExtraVisit: () -> Unit = {}
 ) {
@@ -136,12 +137,20 @@ fun HealthScreen(
                         Spacer(Modifier.width(10.dp))
                         Text("Happy Paws Clinic", style = MaterialTheme.typography.bodySmall, color = Color.Black)
                     }
-                    Button(
-                        onClick = onReschedule,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = blue, contentColor = Color.White),
-                        shape = RoundedCornerShape(10.dp)
-                    ) { Text("Reschedule") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = onMarkAsDone,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = green, contentColor = Color.White),
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text("Mark as done") }
+                        Button(
+                            onClick = onReschedule,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5E7EB), contentColor = Color(0xFF111827)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text("Reschedule") }
+                    }
                 }
             }
 
@@ -165,14 +174,6 @@ fun HealthScreen(
                             contentAlignment = Alignment.Center
                         ) { Icon(Icons.Filled.HealthAndSafety, contentDescription = null, tint = green) }
                         Text("Routine Checkup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Surface(color = greenSurface, shape = RoundedCornerShape(999.dp)) {
-                            Text(
-                                "Completed",
-                                color = green,
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
                     }
                     Text("Nov 10, 2024", style = MaterialTheme.typography.bodySmall, color = muted)
                     Text("Dr. Sarah Johnson – Happy Paws Clinic", style = MaterialTheme.typography.bodySmall)
@@ -202,14 +203,6 @@ fun HealthScreen(
                             contentAlignment = Alignment.Center
                         ) { Icon(Icons.Filled.Warning, contentDescription = null, tint = red) }
                         Text("Emergency Visit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Surface(color = redSurface, shape = RoundedCornerShape(999.dp)) {
-                            Text(
-                                "Emergency",
-                                color = red,
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
                     }
                     Text("Oct 22, 2024", style = MaterialTheme.typography.bodySmall, color = muted)
                     Text("Dr. Mike Wilson – Emergency Vet Center", style = MaterialTheme.typography.bodySmall)
@@ -222,28 +215,7 @@ fun HealthScreen(
                 }
             }
 
-            // Log Extraordinary Visit button-like row
-            Surface(
-                tonalElevation = 0.dp,
-                shape = RoundedCornerShape(12.dp),
-                color = lightGray,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE5E7EB)),
-                        contentAlignment = Alignment.Center
-                    ) { Text("+", color = muted, style = MaterialTheme.typography.titleMedium) }
-                    Spacer(Modifier.width(8.dp))
-                    Text("Log Extraordinary Visit", style = MaterialTheme.typography.labelLarge, color = muted, modifier = Modifier.clickable { onAddExtraVisit() })
-                }
-            }
+            
         }
     }
 }
