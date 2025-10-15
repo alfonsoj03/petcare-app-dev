@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 sealed class Destinations(val route: String, val label: String, val icon: ImageVector) {
     data object Splash : Destinations("splash", "Splash", Icons.Filled.Pets)
     data object Login : Destinations("login", "Login", Icons.Filled.Pets)
-    data object Dashboard : Destinations("dashboard", "Dashboard", Icons.Filled.Home)
+    data object Dashboard : Destinations("dashboard", "Home", Icons.Filled.Home)
     data object Health : Destinations("health", "Health", Icons.Filled.Favorite)
     data object Routine : Destinations("routine", "Routine", Icons.Filled.Schedule)
     data object Pets : Destinations("pets", "Pets", Icons.Filled.Pets)
@@ -22,6 +22,6 @@ sealed class Destinations(val route: String, val label: String, val icon: ImageV
     }
 
     companion object {
-        val bottomItems = listOf(Dashboard, Health, Pets, Routine)
+        val bottomItems = listOf(Dashboard, Routine, Health, Pets)
     }
 }
