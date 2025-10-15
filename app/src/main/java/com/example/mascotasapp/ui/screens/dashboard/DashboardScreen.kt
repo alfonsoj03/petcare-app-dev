@@ -57,17 +57,20 @@ fun DashboardScreen(
         topBar = {
             Surface(color = Color.White, tonalElevation = 0.dp, shadowElevation = 0.dp) {
                 TopAppBar(
-                    title = { Text("PetCare", style = MaterialTheme.typography.titleLarge) },
-                    navigationIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Pets,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    },
+                    title = { Text("PetCare", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Color(0xFF111827)) },
                     actions = {
                         val showMenu = remember { mutableStateOf(false) }
+                        // Green circular paw badge
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10B981)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(imageVector = Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(Modifier.width(6.dp))
                         IconButton(onClick = { /* notifications */ }, modifier = Modifier.padding(end = 1.dp)) {
                             Icon(
                                 imageVector = Icons.Default.NotificationsNone,

@@ -44,32 +44,29 @@ fun RoutineScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF10B981)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            "Routine",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                            color = Color(0xFF111827)
-                        )
-                    }
+                    Text(
+                        "Routine",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                        color = Color(0xFF111827)
+                    )
                 },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null) }
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                actions = {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp)) }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White,
                     scrolledContainerColor = Color.White
                 ),
@@ -284,11 +281,14 @@ private fun MedicationCard(
                 val isOn = reminder.contains("On", ignoreCase = true)
                 val chipBg = if (isOn) Color(0xFFE6F9EE) else Color(0xFFF3F4F6)
                 val chipFg = if (isOn) Color(0xFF10B981) else Color(0xFF6B7280)
-                AssistChip(
-                    onClick = {},
-                    label = { Text(reminder) },
-                    colors = AssistChipDefaults.assistChipColors(containerColor = chipBg, labelColor = chipFg)
-                )
+                Surface(color = chipBg, shape = RoundedCornerShape(999.dp)) {
+                    Text(
+                        reminder,
+                        color = chipFg,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {

@@ -76,21 +76,22 @@ fun PetsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Pets", style = MaterialTheme.typography.titleLarge) },
+                title = {
+                    Text(
+                        "My Pets",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = Color(0xFF111827)
+                    )
+                },
                 actions = {
                     // Green circular paw icon as in wireframe
                     Box(
                         modifier = Modifier
-                            .padding(end = 8.dp)
                             .size(28.dp)
                             .background(Color(0xFF10B981), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Pets,
-                            contentDescription = null,
-                            tint = Color.White
-                        )
+                        Icon(imageVector = Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
