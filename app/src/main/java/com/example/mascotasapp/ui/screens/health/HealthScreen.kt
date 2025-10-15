@@ -48,13 +48,17 @@ fun HealthScreen(
     val lightGray = Color(0xFFF3F4F6)
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Health & Vaccination", style = MaterialTheme.typography.titleLarge) },
+            TopAppBar(
+                title = {
+                    Text(
+                        "Health & Vaccination",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = Color(0xFF111827)
+                    )
+                },
                 navigationIcon = {
                     if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = null)
-                        }
+                        IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null) }
                     }
                 },
                 actions = {
@@ -66,7 +70,7 @@ fun HealthScreen(
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White) }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White,
                     scrolledContainerColor = Color.White
                 ),
@@ -161,14 +165,14 @@ fun HealthScreen(
                             contentAlignment = Alignment.Center
                         ) { Icon(Icons.Filled.HealthAndSafety, contentDescription = null, tint = green) }
                         Text("Routine Checkup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        AssistChip(
-                            onClick = {},
-                            label = { Text("Completed") },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = greenSurface,
-                                labelColor = green
+                        Surface(color = greenSurface, shape = RoundedCornerShape(999.dp)) {
+                            Text(
+                                "Completed",
+                                color = green,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
-                        )
+                        }
                     }
                     Text("Nov 10, 2024", style = MaterialTheme.typography.bodySmall, color = muted)
                     Text("Dr. Sarah Johnson – Happy Paws Clinic", style = MaterialTheme.typography.bodySmall)
@@ -198,14 +202,14 @@ fun HealthScreen(
                             contentAlignment = Alignment.Center
                         ) { Icon(Icons.Filled.Warning, contentDescription = null, tint = red) }
                         Text("Emergency Visit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        AssistChip(
-                            onClick = {},
-                            label = { Text("Emergency") },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = redSurface,
-                                labelColor = red
+                        Surface(color = redSurface, shape = RoundedCornerShape(999.dp)) {
+                            Text(
+                                "Emergency",
+                                color = red,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
-                        )
+                        }
                     }
                     Text("Oct 22, 2024", style = MaterialTheme.typography.bodySmall, color = muted)
                     Text("Dr. Mike Wilson – Emergency Vet Center", style = MaterialTheme.typography.bodySmall)

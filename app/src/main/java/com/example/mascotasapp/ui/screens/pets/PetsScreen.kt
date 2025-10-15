@@ -47,6 +47,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.text.font.FontWeight
+import coil.compose.AsyncImage
 
 enum class EventType { VACCINE, VET, OVERDUE }
 
@@ -79,21 +80,22 @@ fun PetsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Pets", style = MaterialTheme.typography.titleLarge) },
+                title = {
+                    Text(
+                        "My Pets",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = Color(0xFF111827)
+                    )
+                },
                 actions = {
                     // Green circular paw icon as in wireframe
                     Box(
                         modifier = Modifier
-                            .padding(end = 8.dp)
                             .size(28.dp)
                             .background(Color(0xFF10B981), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Pets,
-                            contentDescription = null,
-                            tint = Color.White
-                        )
+                        Icon(imageVector = Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -156,14 +158,32 @@ private fun PetRowCard(
                 .padding(top = 12.dp, end = 12.dp, start = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = painterResource(id = pet.imageRes),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            )
+            val imageUrl = when {
+                pet.species.equals("Feline", ignoreCase = true) ->
+                    "https://images.unsplash.com/photo-1543852786-1cf6624b9987?q=80&w=600&auto=format&fit=crop" // Persian-like cat
+                pet.breed.equals("Beagle", ignoreCase = true) ->
+                    "https://images.unsplash.com/photo-1587300003388-59208cc962cb?q=80&w=600&auto=format&fit=crop" // Beagle
+                else -> null
+            }
+            if (imageUrl != null) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = R.drawable.foto_stock_perrito),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                )
+            }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(

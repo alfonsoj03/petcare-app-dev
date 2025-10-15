@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -43,8 +44,14 @@ fun RoutineScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Routine", style = MaterialTheme.typography.titleLarge) },
+            TopAppBar(
+                title = {
+                    Text(
+                        "Routine",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                        color = Color(0xFF111827)
+                    )
+                },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null) }
@@ -52,13 +59,14 @@ fun RoutineScreen(
                 },
                 actions = {
                     Box(
-                        modifier = Modifier.size(28.dp).clip(CircleShape).background(green),
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981)),
                         contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Filled.MedicalServices, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                    }
+                    ) { Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White,
                     scrolledContainerColor = Color.White
                 ),
@@ -175,34 +183,55 @@ private fun RoutineCard(
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, Color(0xFFEFF1F5))
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusFg))
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(statusFg)
+                )
                 Spacer(Modifier.width(8.dp))
-                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                AssistChip(onClick = {}, label = { Text(statusText) }, colors = AssistChipDefaults.assistChipColors(containerColor = statusBg, labelColor = statusFg))
+                Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), modifier = Modifier.weight(1f))
+                Surface(color = statusBg, shape = RoundedCornerShape(999.dp)) {
+                    Text(
+                        statusText,
+                        color = statusFg,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Last Date", style = MaterialTheme.typography.labelMedium, color = Color(0xFF9CA3AF))
-                    Text(lastDate, style = MaterialTheme.typography.bodyMedium)
+                    Text(lastDate, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = Color(0xFF111827))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Next Date", style = MaterialTheme.typography.labelMedium, color = Color(0xFF9CA3AF))
-                    Text(nextDate, style = MaterialTheme.typography.bodyMedium, color = highlightNextColor ?: Color.Unspecified)
+                    Text(nextDate, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = highlightNextColor ?: Color(0xFF111827))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onMarkDone, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981), contentColor = Color.White), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
+                Button(
+                    onClick = onMarkDone,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF33C59D), contentColor = Color.White),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                ) {
                     Text("Mark as done")
                 }
                 FilledTonalButton(
                     onClick = onEdit,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = Color(0xFFF3F4F6),
                         contentColor = Color.Black
@@ -230,8 +259,19 @@ private fun MedicationCard(
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(color = Color(0xFFEDE9FE), shape = RoundedCornerShape(10.dp)) {
-                    Icon(Icons.Filled.Medication, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.padding(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFEDE9FE)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Medication,
+                        contentDescription = null,
+                        tint = Color(0xFF7C3AED),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -241,11 +281,14 @@ private fun MedicationCard(
                 val isOn = reminder.contains("On", ignoreCase = true)
                 val chipBg = if (isOn) Color(0xFFE6F9EE) else Color(0xFFF3F4F6)
                 val chipFg = if (isOn) Color(0xFF10B981) else Color(0xFF6B7280)
-                AssistChip(
-                    onClick = {},
-                    label = { Text(reminder) },
-                    colors = AssistChipDefaults.assistChipColors(containerColor = chipBg, labelColor = chipFg)
-                )
+                Surface(color = chipBg, shape = RoundedCornerShape(999.dp)) {
+                    Text(
+                        reminder,
+                        color = chipFg,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {

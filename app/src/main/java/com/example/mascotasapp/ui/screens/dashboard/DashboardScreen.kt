@@ -57,17 +57,20 @@ fun DashboardScreen(
         topBar = {
             Surface(color = Color.White, tonalElevation = 0.dp, shadowElevation = 0.dp) {
                 TopAppBar(
-                    title = { Text("PetCare", style = MaterialTheme.typography.titleLarge) },
-                    navigationIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Pets,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    },
+                    title = { Text("PetCare", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Color(0xFF111827)) },
                     actions = {
                         val showMenu = remember { mutableStateOf(false) }
+                        // Green circular paw badge
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10B981)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(imageVector = Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(Modifier.width(6.dp))
                         IconButton(onClick = { /* notifications */ }, modifier = Modifier.padding(end = 1.dp)) {
                             Icon(
                                 imageVector = Icons.Default.NotificationsNone,
@@ -294,22 +297,66 @@ private fun QuickActionCard(
 
 @Composable
 private fun RecentActivitySection() {
+    data class Activity(
+        val title: String,
+        val subtitle: String,
+        val time: String,
+        val icon: ImageVector,
+        val bg: Color,
+        val tint: Color
+    )
     val recent = listOf(
-        "Bath completed — Oct 10",
-        "Vaccine updated — Oct 03",
-        "Feeding recorded — Oct 02",
+        Activity(
+            title = "Bath Recorded",
+            subtitle = "Weekly grooming session",
+            time = "Yesterday",
+            icon = Icons.Default.Opacity,
+            bg = Color(0xFFCFFAFE),
+            tint = Color(0xFF0891B2)
+        ),
+        Activity(
+            title = "Vaccine Recorded",
+            subtitle = "Rabies booster updated",
+            time = "2 hours ago",
+            icon = Icons.Default.Vaccines,
+            bg = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            tint = MaterialTheme.colorScheme.primary
+        ),
+        Activity(
+            title = "Feeding Recorded",
+            subtitle = "Chicken kibble • 2 cups",
+            time = "Today, 8:00 AM",
+            icon = Icons.Default.Restaurant,
+            bg = Color(0xFFFFEDD5),
+            tint = Color(0xFFEA580C)
+        )
     )
     Text(text = "Recent Activity", style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(8.dp))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         recent.forEach { item ->
-            ActivityItem(title = "Vaccine Recorded", subtitle = item, time = "2 hours ago")
+            ActivityItem(
+                title = item.title,
+                subtitle = item.subtitle,
+                time = item.time,
+                icon = item.icon,
+                bg = item.bg,
+                tint = item.tint
+            )
         }
     }
 }
 
 @Composable
-private fun ActivityItem(title: String, subtitle: String, time: String, modifier: Modifier = Modifier,) {
+private fun ActivityItem(
+    title: String,
+    subtitle: String,
+    time: String,
+    icon: ImageVector,
+    bg: Color,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
     Box(
         modifier = modifier
             .shadow(
@@ -329,16 +376,8 @@ private fun ActivityItem(title: String, subtitle: String, time: String, modifier
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    shape = CircleShape
-                ) {
-                    Icon(
-                        Icons.Default.Vaccines,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(10.dp)
-                    )
+                Surface(color = bg, shape = CircleShape) {
+                    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.padding(10.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
