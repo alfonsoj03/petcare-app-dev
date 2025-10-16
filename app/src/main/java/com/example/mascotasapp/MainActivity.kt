@@ -85,9 +85,9 @@ fun AppRoot() {
             if (currentRoute !in hideBottomBarRoutes) {
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
-                        .background(Color.White)
+                        .background(Color(0xFFF9FAFB))
                 ) {
-                    NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
+                    NavigationBar(containerColor = Color(0xFFF9FAFB), tonalElevation = 0.dp) {
                         items.forEach { dest ->
                             NavigationBarItem(
                                 selected = currentRoute == dest.route,

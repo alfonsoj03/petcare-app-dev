@@ -67,8 +67,8 @@ fun RoutineScreen(
                     ) { Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White,
-                    scrolledContainerColor = Color.White
+                    containerColor = bgSurface,
+                    scrolledContainerColor = bgSurface
                 ),
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
             )
@@ -80,7 +80,6 @@ fun RoutineScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
