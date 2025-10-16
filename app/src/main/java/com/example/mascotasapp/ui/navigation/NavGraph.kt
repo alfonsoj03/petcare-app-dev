@@ -21,6 +21,9 @@ sealed class Destinations(val route: String, val label: String, val icon: ImageV
         fun routeFor(petId: String) = "pets/edit/$petId"
     }
     data object AddVisit : Destinations("health/addvisit", "Add Visit", Icons.Filled.Favorite)
+    data object Reschedule : Destinations("health/reschedule", "Reschedule", Icons.Filled.Favorite)
+    data object VisitDetails : Destinations("health/details", "Details", Icons.Filled.Favorite)
+    data object EditVisit : Destinations("health/edit", "Edit Visit", Icons.Filled.Favorite)
 
     companion object {
         val bottomItems = listOf(Dashboard, Routine, Health, Pets)

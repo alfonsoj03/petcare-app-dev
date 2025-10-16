@@ -3,9 +3,9 @@ package com.example.mascotasapp.ui.screens.health
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pets
@@ -26,10 +26,14 @@ import androidx.compose.foundation.layout.imePadding
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddVisitScreen(
+fun RescheduleScreen(
     onBack: () -> Unit = {},
-    onSave: (visitType: String, date: String, time: String, clinic: String, vet: String, notes: String) -> Unit = { _,_,_,_,_,_ -> },
-    onCancel: () -> Unit = {}
+    onSave: (visitType: String, date: String, time: String, clinic: String, vet: String, reason: String) -> Unit = { _,_,_,_,_,_ -> },
+    initialVisitType: String = "Routine Checkup",
+    initialDate: String = "2025-12-15",
+    initialTime: String = "2:30",
+    initialClinic: String = "Happy Paws Clinic",
+    initialVet: String = "Dr. Michael Williams",
 ) {
     val brandPurple = Color(0xFF8B5CF6)
     val bgSurface = Color(0xFFF9FAFB)
@@ -37,47 +41,36 @@ fun AddVisitScreen(
 
     var visitTypeExpanded by remember { mutableStateOf(false) }
     val visitTypes = listOf("Routine Checkup", "Vaccine", "Emergency", "Dental", "Other")
-    var visitType by remember { mutableStateOf(visitTypes.first()) }
+    var visitType by remember { mutableStateOf(initialVisitType) }
 
-    var date by remember { mutableStateOf("2025-01-15") }
-    var time by remember { mutableStateOf("10:30") }
-    var clinic by remember { mutableStateOf(TextFieldValue("Happy Paws Clinic")) }
-    var vet by remember { mutableStateOf(TextFieldValue("Dr. Sarah Johnson")) }
-    var notes by remember { mutableStateOf(TextFieldValue("")) }
+    var date by remember { mutableStateOf(initialDate) }
+    var time by remember { mutableStateOf(initialTime) }
+    var clinic by remember { mutableStateOf(TextFieldValue(initialClinic)) }
+    var vet by remember { mutableStateOf(TextFieldValue(initialVet)) }
+    var reason by remember { mutableStateOf(TextFieldValue("")) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "Add Visit",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = Color(0xFF111827)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null) }
-                },
+                title = { Text("Reschedule", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Color(0xFF111827)) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null) } },
                 actions = {
                     Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(green),
+                        modifier = Modifier.size(28.dp).clip(CircleShape).background(green),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.White,
-                    scrolledContainerColor = Color.White
-                ),
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White, scrolledContainerColor = Color.White),
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
             )
         },
         containerColor = bgSurface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            Column(modifier = Modifier.background(Color.White)) {
+            Column(
+                modifier = Modifier
+                    .background(Color.White)
+            ) {
                 Divider(color = Color(0xFFE5E7EB))
                 Box(
                     modifier = Modifier
@@ -86,8 +79,10 @@ fun AddVisitScreen(
                         .navigationBarsPadding()
                 ) {
                     Button(
-                        onClick = { onSave(visitType, date, time, clinic.text, vet.text, notes.text) },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        onClick = { onSave(visitType, date, time, clinic.text, vet.text, reason.text) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = brandPurple, contentColor = Color.White),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Save Changes") }
@@ -95,13 +90,12 @@ fun AddVisitScreen(
             }
         }
     ) { inner ->
-        val scroll = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
-                .verticalScroll(scroll)
+                .verticalScroll(rememberScrollState())
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -138,37 +132,48 @@ fun AddVisitScreen(
                     }
                 }
 
-                Text("Date & Time *", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        value = date,
-                        onValueChange = { date = it },
-                        trailingIcon = { Icon(Icons.Filled.Today, contentDescription = null, tint = Color(0xFF111827)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFD1D5DB),
-                            unfocusedBorderColor = Color(0xFFE5E7EB),
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
-                        )
+                Text("Date *", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
+                OutlinedTextField(
+                    value = date,
+                    onValueChange = { date = it },
+                    trailingIcon = { Icon(Icons.Filled.Today, contentDescription = null, tint = Color(0xFF111827)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFFD1D5DB),
+                        unfocusedBorderColor = Color(0xFFE5E7EB),
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
                     )
-                    OutlinedTextField(
-                        value = time,
-                        onValueChange = { time = it },
-                        trailingIcon = { Icon(Icons.Filled.Schedule, contentDescription = null, tint = Color(0xFF111827)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFD1D5DB),
-                            unfocusedBorderColor = Color(0xFFE5E7EB),
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
-                        )
+                )
+
+                Text("Time *", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
+                OutlinedTextField(
+                    value = time,
+                    onValueChange = { time = it },
+                    trailingIcon = { Icon(Icons.Filled.Schedule, contentDescription = null, tint = Color(0xFF111827)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFFD1D5DB),
+                        unfocusedBorderColor = Color(0xFFE5E7EB),
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
                     )
+                )
+
+                Text("Suggested times:", style = MaterialTheme.typography.labelLarge, color = Color(0xFF6B7280))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val suggestionColors = AssistChipDefaults.assistChipColors(
+                        containerColor = Color(0xFFF3F4F6),
+                        labelColor = Color(0xFF111827)
+                    )
+                    listOf("09:30", "10:00", "10:30").forEach { t ->
+                        AssistChip(onClick = { time = t }, label = { Text(t) }, colors = suggestionColors)
+                    }
                 }
 
-                Text("Clinic / Location *", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
+                Text("Clinic / Location", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
                 OutlinedTextField(
                     value = clinic,
                     onValueChange = { clinic = it },
@@ -182,7 +187,7 @@ fun AddVisitScreen(
                     )
                 )
 
-                Text("Veterinarian *", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
+                Text("Veterinarian", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
                 OutlinedTextField(
                     value = vet,
                     onValueChange = { vet = it },
@@ -196,19 +201,17 @@ fun AddVisitScreen(
                     )
                 )
 
-                Text("Visit Notes", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
+                Text("Reason for reschedule", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
                 OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 120.dp),
+                    value = reason,
+                    onValueChange = { reason = it },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFFD1D5DB),
                         unfocusedBorderColor = Color(0xFFE5E7EB),
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
                     )
                 )
             }

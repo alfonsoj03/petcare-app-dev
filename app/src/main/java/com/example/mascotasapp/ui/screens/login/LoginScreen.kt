@@ -18,6 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
+import com.example.mascotasapp.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,17 +32,14 @@ fun LoginScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Create Account", style = MaterialTheme.typography.titleLarge) },
+                title = { Text("Create Account", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Color(0xFF111827)) },
                 actions = {
                     Box(
                         modifier = Modifier
-                            .padding(end = 8.dp)
                             .size(28.dp)
-                            .background(MaterialTheme.colorScheme.secondary, CircleShape),
+                            .background(Color(0xFF10B981), CircleShape),
                         contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White)
-                    }
+                    ) { Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White,
@@ -98,10 +97,7 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Black,
-                    contentColor = Color.White
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White)
             ) {
                 Text("Create Account", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
             }
@@ -120,9 +116,14 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .height(48.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black)
+                border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp, brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFE5E7EB))),
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White, contentColor = Color(0xFF111827))
             ) {
-                Text("Continue with Google")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("G", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Continue with Google", style = MaterialTheme.typography.bodyMedium)
+                }
             }
             OutlinedButton(
                 onClick = onSignIn,
@@ -130,9 +131,14 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .height(48.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black)
+                border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp, brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFE5E7EB))),
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White, contentColor = Color(0xFF111827))
             ) {
-                Text("Continue with Apple")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painter = painterResource(id = R.drawable.ic_apple), contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text("Continue with Apple", style = MaterialTheme.typography.bodyMedium)
+                }
             }
 
             Spacer(Modifier.height(8.dp))
