@@ -68,8 +68,8 @@ fun RoutineScreen(
                     ) { Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White,
-                    scrolledContainerColor = Color.White
+                    containerColor = bgSurface,
+                    scrolledContainerColor = bgSurface
                 ),
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
             )
@@ -81,7 +81,6 @@ fun RoutineScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -116,8 +115,7 @@ fun RoutineScreen(
                     lastDate = "Oct 10, 2025",
                     nextDate = "Oct 20, 2025",
                     onMarkDone = { onMarkDone("dental") },
-                    onEdit = { onEditItem("dental") },
-                    highlightNextColor = orange
+                    onEdit = { onEditItem("dental") }
                 )
             }
             item {
@@ -199,14 +197,6 @@ private fun RoutineCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), modifier = Modifier.weight(1f))
-                Surface(color = statusBg, shape = RoundedCornerShape(999.dp)) {
-                    Text(
-                        statusText,
-                        color = statusFg,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -282,17 +272,7 @@ private fun MedicationCard(
                     Text(name, style = MaterialTheme.typography.titleMedium)
                     Text(dose, style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B7280))
                 }
-                val isOn = reminder.contains("On", ignoreCase = true)
-                val chipBg = if (isOn) Color(0xFFE6F9EE) else Color(0xFFF3F4F6)
-                val chipFg = if (isOn) Color(0xFF10B981) else Color(0xFF6B7280)
-                Surface(color = chipBg, shape = RoundedCornerShape(999.dp)) {
-                    Text(
-                        reminder,
-                        color = chipFg,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
+                // Removed reminder pill
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {

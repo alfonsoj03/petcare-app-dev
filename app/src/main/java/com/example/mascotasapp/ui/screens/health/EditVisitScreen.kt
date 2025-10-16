@@ -3,9 +3,9 @@ package com.example.mascotasapp.ui.screens.health
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pets
@@ -26,10 +26,14 @@ import androidx.compose.foundation.layout.imePadding
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddVisitScreen(
+fun EditVisitScreen(
     onBack: () -> Unit = {},
     onSave: (visitType: String, date: String, time: String, clinic: String, vet: String, notes: String) -> Unit = { _,_,_,_,_,_ -> },
-    onCancel: () -> Unit = {}
+    initialVisitType: String = "Routine Checkup",
+    initialDate: String = "2025-01-15",
+    initialTime: String = "10:30",
+    initialClinic: String = "Happy Paws Clinic",
+    initialVet: String = "Dr. Sarah Johnson",
 ) {
     val brandPurple = Color(0xFF8B5CF6)
     val bgSurface = Color(0xFFF9FAFB)
@@ -37,40 +41,26 @@ fun AddVisitScreen(
 
     var visitTypeExpanded by remember { mutableStateOf(false) }
     val visitTypes = listOf("Routine Checkup", "Vaccine", "Emergency", "Dental", "Other")
-    var visitType by remember { mutableStateOf(visitTypes.first()) }
+    var visitType by remember { mutableStateOf(initialVisitType) }
 
-    var date by remember { mutableStateOf("2025-01-15") }
-    var time by remember { mutableStateOf("10:30") }
-    var clinic by remember { mutableStateOf(TextFieldValue("Happy Paws Clinic")) }
-    var vet by remember { mutableStateOf(TextFieldValue("Dr. Sarah Johnson")) }
+    var date by remember { mutableStateOf(initialDate) }
+    var time by remember { mutableStateOf(initialTime) }
+    var clinic by remember { mutableStateOf(TextFieldValue(initialClinic)) }
+    var vet by remember { mutableStateOf(TextFieldValue(initialVet)) }
     var notes by remember { mutableStateOf(TextFieldValue("")) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "Add Visit",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = Color(0xFF111827)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null) }
-                },
+                title = { Text("Edit Visit", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Color(0xFF111827)) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null) } },
                 actions = {
                     Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(green),
+                        modifier = Modifier.size(28.dp).clip(CircleShape).background(green),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Filled.Pets, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.White,
-                    scrolledContainerColor = Color.White
-                ),
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White, scrolledContainerColor = Color.White),
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
             )
         },
@@ -95,13 +85,12 @@ fun AddVisitScreen(
             }
         }
     ) { inner ->
-        val scroll = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
-                .verticalScroll(scroll)
+                .verticalScroll(rememberScrollState())
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -122,8 +111,8 @@ fun AddVisitScreen(
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFD1D5DB),
-                            unfocusedBorderColor = Color(0xFFE5E7EB),
+                            focusedBorderColor = brandPurple,
+                            unfocusedBorderColor = brandPurple,
                             focusedContainerColor = Color.White,
                             unfocusedContainerColor = Color.White
                         )
@@ -138,7 +127,6 @@ fun AddVisitScreen(
                     }
                 }
 
-                Text("Date & Time *", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = date,
@@ -147,8 +135,8 @@ fun AddVisitScreen(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFD1D5DB),
-                            unfocusedBorderColor = Color(0xFFE5E7EB),
+                            focusedBorderColor = brandPurple,
+                            unfocusedBorderColor = brandPurple,
                             focusedContainerColor = Color.White,
                             unfocusedContainerColor = Color.White
                         )
@@ -160,8 +148,8 @@ fun AddVisitScreen(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFD1D5DB),
-                            unfocusedBorderColor = Color(0xFFE5E7EB),
+                            focusedBorderColor = brandPurple,
+                            unfocusedBorderColor = brandPurple,
                             focusedContainerColor = Color.White,
                             unfocusedContainerColor = Color.White
                         )
@@ -175,8 +163,8 @@ fun AddVisitScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFD1D5DB),
-                        unfocusedBorderColor = Color(0xFFE5E7EB),
+                        focusedBorderColor = brandPurple,
+                        unfocusedBorderColor = brandPurple,
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White
                     )
@@ -189,8 +177,8 @@ fun AddVisitScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFD1D5DB),
-                        unfocusedBorderColor = Color(0xFFE5E7EB),
+                        focusedBorderColor = brandPurple,
+                        unfocusedBorderColor = brandPurple,
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White
                     )
@@ -205,10 +193,10 @@ fun AddVisitScreen(
                         .heightIn(min = 120.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFD1D5DB),
-                        unfocusedBorderColor = Color(0xFFE5E7EB),
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent
+                        focusedBorderColor = brandPurple,
+                        unfocusedBorderColor = brandPurple,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
                     )
                 )
             }

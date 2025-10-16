@@ -26,6 +26,9 @@ import com.example.mascotasapp.ui.screens.splash.SplashScreen
 import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
 import com.example.mascotasapp.ui.screens.health.HealthScreen
 import com.example.mascotasapp.ui.screens.health.AddVisitScreen
+import com.example.mascotasapp.ui.screens.health.RescheduleScreen
+import com.example.mascotasapp.ui.screens.health.VisitDetailsScreen
+import com.example.mascotasapp.ui.screens.health.EditVisitScreen
 import com.example.mascotasapp.ui.screens.profile.ProfileScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineScreen
 import com.example.mascotasapp.ui.screens.routine.RoutineCareFormScreen
@@ -73,19 +76,20 @@ fun AppRoot() {
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
-            if (
-                currentRoute != Destinations.Login.route &&
-                currentRoute != Destinations.Splash.route &&
-                currentRoute != Destinations.RoutineAdd.route &&
-                currentRoute != Destinations.RoutineEdit.route &&
-                currentRoute != Destinations.MedicationAdd.route &&
-                currentRoute != Destinations.MedicationEdit.route
-            ) {
+            val hideBottomBarRoutes = setOf(
+                Destinations.Login.route,
+                Destinations.Splash.route,
+                Destinations.AddVisit.route,
+                Destinations.Reschedule.route,
+                Destinations.VisitDetails.route,
+                Destinations.EditVisit.route
+            )
+            if (currentRoute !in hideBottomBarRoutes) {
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
-                        .background(Color.White)
+                        .background(Color(0xFFF9FAFB))
                 ) {
-                    NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
+                    NavigationBar(containerColor = Color(0xFFF9FAFB), tonalElevation = 0.dp) {
                         items.forEach { dest ->
                             NavigationBarItem(
                                 selected = currentRoute == dest.route,
@@ -179,7 +183,9 @@ fun AppRoot() {
             }
             composable(Destinations.Health.route) {
                 HealthScreen(
-                    onAddExtraVisit = { navController.navigate(Destinations.AddVisit.route) }
+                    onAddExtraVisit = { navController.navigate(Destinations.AddVisit.route) },
+                    onReschedule = { navController.navigate(Destinations.Reschedule.route) },
+                    onViewDetails = { navController.navigate(Destinations.VisitDetails.route) }
                 )
             }
             composable(Destinations.Pets.route) {
@@ -238,6 +244,24 @@ fun AppRoot() {
                     onBack = { navController.navigateUp() },
                     onSave = { _,_,_,_,_,_ -> navController.navigateUp() },
                     onCancel = { navController.navigateUp() }
+                )
+            }
+            composable(Destinations.Reschedule.route) {
+                RescheduleScreen(
+                    onBack = { navController.navigateUp() },
+                    onSave = { _,_,_,_,_,_ -> navController.navigateUp() }
+                )
+            }
+            composable(Destinations.VisitDetails.route) {
+                VisitDetailsScreen(
+                    onBack = { navController.navigateUp() },
+                    onEdit = { navController.navigate(Destinations.EditVisit.route) }
+                )
+            }
+            composable(Destinations.EditVisit.route) {
+                EditVisitScreen(
+                    onBack = { navController.navigateUp() },
+                    onSave = { _,_,_,_,_,_ -> navController.navigateUp() }
                 )
             }
         }
