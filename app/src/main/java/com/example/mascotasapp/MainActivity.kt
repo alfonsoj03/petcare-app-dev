@@ -135,12 +135,16 @@ fun AppRoot() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Destinations.Splash.route) {
-                SplashScreen(onFinished = {
+                SplashScreen(
+                    onFinished = {
                     navController.navigate(Destinations.Login.route) {
                         popUpTo(Destinations.Splash.route) { inclusive = true }
                         launchSingleTop = true
                     }
-                })
+                },
+                    topDecorationResId = R.drawable.splash_top_purple,
+                    bottomDecorationResId = R.drawable.splash_bottom_green
+                )
             }
             composable(Destinations.Login.route) {
                 LoginScreen(
