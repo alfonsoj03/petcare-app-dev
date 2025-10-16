@@ -88,7 +88,7 @@ fun SplashScreen(
                 Spacer(Modifier.height(16.dp))
                 Text(text = "PetCare", color = Color.Black, style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
-                Text(text = "¡El mejor cuidado para tus mascotas!", color = Color(0xFF6B7280), style = MaterialTheme.typography.bodyMedium)
+                Text(text = "The best care for your pets!", color = Color(0xFF6B7280), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
