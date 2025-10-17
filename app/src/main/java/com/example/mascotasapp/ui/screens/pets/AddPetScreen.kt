@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 
 @Composable
-fun AddPetScreen(onBack: () -> Unit = {}) {
+fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
     var name by remember { mutableStateOf("") }
     var speciesExpanded by remember { mutableStateOf(false) }
     val speciesOptions = listOf("Dog", "Cat", "Other")
@@ -64,13 +64,34 @@ fun AddPetScreen(onBack: () -> Unit = {}) {
             )
         },
         containerColor = Color(0xFFF9FAFB),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            Surface(color = Color.White) {
+                Column {
+                    Divider(color = Color(0xFFE5E7EB))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                    ) {
+                        ElevatedButton(
+                            onClick = onAdd,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White)
+                        ) { Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) }
+                    }
+                }
+            }
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -185,17 +206,7 @@ fun AddPetScreen(onBack: () -> Unit = {}) {
                     shape = RoundedCornerShape(12.dp)
                 )
             }
-
             Spacer(Modifier.height(8.dp))
-
-            ElevatedButton(
-                onClick = { /* add pet */ },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White)
-            ) { Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) }
         }
     }
 }

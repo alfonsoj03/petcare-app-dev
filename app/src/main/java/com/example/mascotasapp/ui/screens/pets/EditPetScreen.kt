@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditPetScreen(petId: String, onBack: () -> Unit = {}) {
+fun EditPetScreen(petId: String, onBack: () -> Unit = {}, onSave: () -> Unit = {}) {
     var name by remember { mutableStateOf("") }
     var speciesExpanded by remember { mutableStateOf(false) }
     val speciesOptions = listOf("Dog", "Cat", "Other")
@@ -68,13 +68,36 @@ fun EditPetScreen(petId: String, onBack: () -> Unit = {}) {
             )
         },
         containerColor = Color(0xFFF9FAFB),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            Surface(color = Color.White) {
+                Column {
+                    Divider(color = Color(0xFFE5E7EB))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .navigationBarsPadding()
+                    ) {
+                        ElevatedButton(
+                            onClick = onSave,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White)
+                        ) {
+                            Text("Save Changes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+            }
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -191,19 +214,7 @@ fun EditPetScreen(petId: String, onBack: () -> Unit = {}) {
                     shape = RoundedCornerShape(12.dp)
                 )
             }
-
             Spacer(Modifier.height(8.dp))
-
-            ElevatedButton(
-                onClick = { /* save */ },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White)
-            ) {
-                Text("Save Changes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
-            }
         }
     }
 }

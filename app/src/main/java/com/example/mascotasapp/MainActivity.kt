@@ -86,7 +86,9 @@ fun AppRoot() {
                 Destinations.RoutineAdd.route,
                 Destinations.RoutineEdit.route,
                 Destinations.MedicationAdd.route,
-                Destinations.MedicationEdit.route
+                Destinations.MedicationEdit.route,
+                Destinations.AddPet.route,
+                Destinations.EditPet.route
             )
             if (currentRoute !in hideBottomBarRoutes) {
                 androidx.compose.foundation.layout.Box(
@@ -207,10 +209,30 @@ fun AppRoot() {
                     }
                 )
             }
-            composable(Destinations.AddPet.route) { AddPetScreen(onBack = { navController.navigateUp() }) }
+            composable(Destinations.AddPet.route) {
+                AddPetScreen(
+                    onBack = { navController.navigateUp() },
+                    onAdd = {
+                        // After adding, go back to Pets
+                        navController.navigate(Destinations.Pets.route) {
+                            popUpTo(Destinations.Pets.route) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
             composable(Destinations.EditPet.route) { backStack ->
                 val petId = backStack.arguments?.getString(Destinations.EditPet.ArgPetId) ?: ""
-                EditPetScreen(petId, onBack = { navController.navigateUp() })
+                EditPetScreen(
+                    petId,
+                    onBack = { navController.navigateUp() },
+                    onSave = {
+                        navController.navigate(Destinations.Pets.route) {
+                            popUpTo(Destinations.Pets.route) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                )
             }
             composable(Destinations.Routine.route) {
                 RoutineScreen(
