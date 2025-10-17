@@ -82,7 +82,11 @@ fun AppRoot() {
                 Destinations.AddVisit.route,
                 Destinations.Reschedule.route,
                 Destinations.VisitDetails.route,
-                Destinations.EditVisit.route
+                Destinations.EditVisit.route,
+                Destinations.RoutineAdd.route,
+                Destinations.RoutineEdit.route,
+                Destinations.MedicationAdd.route,
+                Destinations.MedicationEdit.route
             )
             if (currentRoute !in hideBottomBarRoutes) {
                 androidx.compose.foundation.layout.Box(

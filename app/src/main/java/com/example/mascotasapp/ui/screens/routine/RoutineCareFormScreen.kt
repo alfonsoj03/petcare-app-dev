@@ -67,16 +67,25 @@ fun RoutineCareFormScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             Surface(color = Color.White) {
-                ElevatedButton(
-                    onClick = { onConfirm(careName) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = purple, contentColor = Color.White)
-                ) {
-                    Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                Column {
+                    Divider(color = Color(0xFFE5E7EB))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .navigationBarsPadding()
+                    ) {
+                        ElevatedButton(
+                            onClick = { onConfirm(careName) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = purple, contentColor = Color.White)
+                        ) {
+                            Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                        }
+                    }
                 }
             }
         }
@@ -85,7 +94,6 @@ fun RoutineCareFormScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .navigationBarsPadding()
                 .padding(start = 12.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
