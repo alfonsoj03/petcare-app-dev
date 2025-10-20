@@ -1,0 +1,4 @@
+curl -i -X POST "http://127.0.0.1:5001/petcare-ac3c2/us-central1/createPet" \
+  -H "X-Debug-Uid: demo-user" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Buddy","species":"Dog","sex":"Male","breed":"Golden Retriever","dob":"2022-01-10","weight":"28.5","color":"Golden","imageUrl":"https://example.com/buddy.jpg"}'

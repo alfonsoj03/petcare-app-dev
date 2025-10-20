@@ -6,9 +6,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -48,6 +50,14 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class EventType { VACCINE, VET, OVERDUE }
 
@@ -70,12 +80,55 @@ fun PetsScreen(
     selectedPetId: String? = null,
     onSelectedPet: (PetExtended) -> Unit = {}
 ) {
-    val sample = listOf(
-        PetExtended("1", "Max", "Golden Retriever", "Canine", 3, true, "Next: Vaccination - Dec 15", EventType.VACCINE),
-        PetExtended("2", "Luna", "Persian Cat", "Feline", 2, false, "Overdue: Deworming - Nov 20", EventType.OVERDUE),
-        PetExtended("3", "Buddy", "Beagle", "Canine", 1, true, "Next: Vet Visit - Jan 10", EventType.VET),
-    )
-    var selectedId by remember { mutableStateOf(selectedPetId ?: sample.first().id) }
+    val pets = remember { mutableStateListOf<PetExtended>() }
+    var selectedId by remember { mutableStateOf(selectedPetId) }
+
+    // Load from emulator Cloud Function getPets (demo, no auth required)
+    LaunchedEffect(Unit) {
+        val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1"
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val url = URL("$baseUrl/getPets")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                }
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                    val arr = JSONArray(body)
+                    val list = mutableListOf<PetExtended>()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        val id = o.optString("pet_id")
+                        val name = o.optString("name", "Unnamed")
+                        val breed = o.optString("breed", "")
+                        val species = o.optString("species", "")
+                        val dob = o.optString("date_of_birth", "")
+                        val ageY = safeYearsFromDob(dob)
+                        list.add(
+                            PetExtended(
+                                id = id.ifBlank { name + i },
+                                name = name,
+                                breed = breed,
+                                species = species,
+                                ageYears = ageY,
+                                upToDate = true,
+                                nextEvent = "—",
+                                eventType = EventType.VET
+                            )
+                        )
+                    }
+                    withContext(Dispatchers.Main) {
+                        pets.clear(); pets.addAll(list)
+                        if (selectedId == null && pets.isNotEmpty()) selectedId = pets.first().id
+                    }
+                }
+                conn.disconnect()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -119,7 +172,7 @@ fun PetsScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(sample, key = { it.id }) { pet ->
+            items(pets, key = { it.id }) { pet ->
                 PetRowCard(
                     pet = pet,
                     selected = pet.id == selectedId,
@@ -134,6 +187,13 @@ fun PetsScreen(
         }
     }
 }
+
+private fun safeYearsFromDob(dob: String): Int = runCatching {
+    if (dob.isBlank()) return 0
+    val year = dob.substring(0, 4).toInt()
+    val nowYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    (nowYear - year).coerceAtLeast(0)
+}.getOrDefault(0)
 
 @Composable
 private fun PetRowCard(

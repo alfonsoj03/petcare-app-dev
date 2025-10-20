@@ -22,6 +22,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.BufferedReader
+import java.io.BufferedWriter
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.compose.foundation.layout.windowInsetsPadding
 
 @Composable
@@ -39,6 +49,10 @@ fun AddPetScreen(onBack: () -> Unit = {}) {
     var dob by remember { mutableStateOf("") }
     var weight by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
+
+    val ctx = LocalContext.current
+    val scope = remember { CoroutineScope(Dispatchers.IO) }
+    val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1" // Emulator Functions base (host loopback for Android emulator)
 
     Scaffold(
         topBar = {
@@ -189,7 +203,51 @@ fun AddPetScreen(onBack: () -> Unit = {}) {
             Spacer(Modifier.height(8.dp))
 
             ElevatedButton(
-                onClick = { /* add pet */ },
+                onClick = {
+                    // Simple validation min required
+                    if (name.isBlank() || species.isBlank() || sex.isBlank()) return@ElevatedButton
+                    scope.launch {
+                        try {
+                            val url = URL("$baseUrl/createPet")
+                            val conn = (url.openConnection() as HttpURLConnection).apply {
+                                requestMethod = "POST"
+                                setRequestProperty("Content-Type", "application/json")
+                                // Bypass auth for emulator
+                                setRequestProperty("X-Debug-Uid", "demo-user")
+                                doOutput = true
+                                connectTimeout = 8000
+                                readTimeout = 8000
+                            }
+                            val payload = """
+                                {
+                                  "name": ${jsonQ(name)},
+                                  "species": ${jsonQ(species)},
+                                  "sex": ${jsonQ(sex)},
+                                  "breed": ${jsonQ(breed)},
+                                  "dob": ${jsonQ(dob)},
+                                  "weight": ${jsonQ(weight)},
+                                  "color": ${jsonQ(color)},
+                                  "imageUrl": ""
+                                }
+                            """.trimIndent()
+                            BufferedWriter(OutputStreamWriter(conn.outputStream)).use { it.write(payload) }
+                            val code = conn.responseCode
+                            if (code in 200..299) {
+                                // Go back on success
+                                // Switch to main thread to call callback
+                                kotlinx.coroutines.withContext(Dispatchers.Main) { onBack() }
+                            } else {
+                                val err = runCatching {
+                                    BufferedReader(InputStreamReader(conn.errorStream)).use { it.readText() }
+                                }.getOrNull()
+                                android.util.Log.e("AddPet", "Failed ($code): $err")
+                            }
+                            conn.disconnect()
+                        } catch (e: Exception) {
+                            android.util.Log.e("AddPet", "Error", e)
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp),
@@ -198,4 +256,20 @@ fun AddPetScreen(onBack: () -> Unit = {}) {
             ) { Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) }
         }
     }
+}
+
+// naive JSON string escaper for simple demo
+private fun jsonQ(v: String): String = buildString {
+    append('"')
+    v.forEach { c ->
+        when (c) {
+            '\\' -> append("\\\\")
+            '"' -> append("\\\"")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> append(c)
+        }
+    }
+    append('"')
 }

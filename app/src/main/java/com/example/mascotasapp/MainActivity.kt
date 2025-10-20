@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.NavHost
@@ -50,7 +53,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.example.mascotasapp.R
-// removed ripple/clickable customizations
+import android.util.Log
+import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.foundation.layout.size
 
 class MainActivity : ComponentActivity() {
@@ -70,9 +77,28 @@ fun AppRoot() {
     val items = Destinations.bottomItems
     var selectedPetId by remember { mutableStateOf<String?>(null) }
     var selectedPetImageRes by remember { mutableStateOf(R.drawable.foto_stock_perrito) }
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // One-time Firebase initialization + sanity check (no network)
+    LaunchedEffect(Unit) {
+        try {
+            val app = FirebaseApp.initializeApp(context) ?: FirebaseApp.getInstance()
+            val opts = app.options
+            // Touch Auth/Firestore modules to ensure they are linked (non-KTX)
+            FirebaseAuth.getInstance()
+            FirebaseFirestore.getInstance()
+            Log.i("FirebaseCheck", "Firebase initialized: projectId=${opts.projectId}, applicationId=${opts.applicationId}")
+            snackbarHostState.showSnackbar("Firebase OK: ${opts.projectId}")
+        } catch (e: Exception) {
+            Log.e("FirebaseCheck", "Firebase init failed", e)
+            snackbarHostState.showSnackbar("Firebase init failed: ${e.message}")
+        }
+    }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
