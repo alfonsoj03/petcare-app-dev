@@ -35,7 +35,7 @@ import java.net.URL
 import androidx.compose.foundation.layout.windowInsetsPadding
 
 @Composable
-fun AddPetScreen(onBack: () -> Unit = {}) {
+fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
     var name by remember { mutableStateOf("") }
     var speciesExpanded by remember { mutableStateOf(false) }
     val speciesOptions = listOf("Dog", "Cat", "Other")
@@ -78,13 +78,34 @@ fun AddPetScreen(onBack: () -> Unit = {}) {
             )
         },
         containerColor = Color(0xFFF9FAFB),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            Surface(color = Color.White) {
+                Column {
+                    Divider(color = Color(0xFFE5E7EB))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                    ) {
+                        ElevatedButton(
+                            onClick = onAdd,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White)
+                        ) { Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) }
+                    }
+                }
+            }
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -199,61 +220,7 @@ fun AddPetScreen(onBack: () -> Unit = {}) {
                     shape = RoundedCornerShape(12.dp)
                 )
             }
-
             Spacer(Modifier.height(8.dp))
-
-            ElevatedButton(
-                onClick = {
-                    // Simple validation min required
-                    if (name.isBlank() || species.isBlank() || sex.isBlank()) return@ElevatedButton
-                    scope.launch {
-                        try {
-                            val url = URL("$baseUrl/createPet")
-                            val conn = (url.openConnection() as HttpURLConnection).apply {
-                                requestMethod = "POST"
-                                setRequestProperty("Content-Type", "application/json")
-                                // Bypass auth for emulator
-                                setRequestProperty("X-Debug-Uid", "demo-user")
-                                doOutput = true
-                                connectTimeout = 8000
-                                readTimeout = 8000
-                            }
-                            val payload = """
-                                {
-                                  "name": ${jsonQ(name)},
-                                  "species": ${jsonQ(species)},
-                                  "sex": ${jsonQ(sex)},
-                                  "breed": ${jsonQ(breed)},
-                                  "dob": ${jsonQ(dob)},
-                                  "weight": ${jsonQ(weight)},
-                                  "color": ${jsonQ(color)},
-                                  "imageUrl": ""
-                                }
-                            """.trimIndent()
-                            BufferedWriter(OutputStreamWriter(conn.outputStream)).use { it.write(payload) }
-                            val code = conn.responseCode
-                            if (code in 200..299) {
-                                // Go back on success
-                                // Switch to main thread to call callback
-                                kotlinx.coroutines.withContext(Dispatchers.Main) { onBack() }
-                            } else {
-                                val err = runCatching {
-                                    BufferedReader(InputStreamReader(conn.errorStream)).use { it.readText() }
-                                }.getOrNull()
-                                android.util.Log.e("AddPet", "Failed ($code): $err")
-                            }
-                            conn.disconnect()
-                        } catch (e: Exception) {
-                            android.util.Log.e("AddPet", "Error", e)
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White)
-            ) { Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) }
         }
     }
 }
