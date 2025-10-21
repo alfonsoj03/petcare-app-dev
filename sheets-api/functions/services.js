@@ -70,7 +70,12 @@ async function createMedicationService({userId, body}) {
 
   const sheets = await getSheetsClient();
 
-  // medications sheet: medication_id, user_id, medication_name, start_of_supply, perform_every_number, perform_every_unit, dose_number, dose_unit, end_of_supply, next_supply, created_at
+  // medications sheet (updated): medication_id, user_id, medication_name, start_of_supply, perform_every_number, perform_every_unit, dose_number, dose_unit, total_doses, created_at
+  const totalDosesRaw = required(body.total_doses, "total_doses");
+  const totalDoses = Number(String(totalDosesRaw).trim());
+  if (!Number.isInteger(totalDoses) || totalDoses <= 0) {
+    const e = new Error("total_doses must be a positive integer"); e.status = 400; throw e;
+  }
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: "medications!A1",
@@ -85,8 +90,7 @@ async function createMedicationService({userId, body}) {
       String(unit),
       String(doseNumber),
       String(doseUnit),
-      "",
-      nextSupply,
+      String(totalDoses),
       now,
     ]]},
   });
@@ -100,6 +104,10 @@ async function createMedicationService({userId, body}) {
       pid,
       userId,
       now,
+      "",
+      nextSupply,
+      now,
+      "false",
     ]);
     await sheets.spreadsheets.values.append({
       spreadsheetId,
@@ -119,6 +127,7 @@ async function createMedicationService({userId, body}) {
     perform_every_unit: unit,
     dose_number: doseNumber,
     dose_unit: doseUnit,
+    total_doses: totalDoses,
     assign_to_pets: petIds,
   });
   await sheets.spreadsheets.values.append({
@@ -147,7 +156,7 @@ async function createMedicationService({userId, body}) {
       perform_every_unit: unit,
       dose_number: doseNumber,
       dose_unit: doseUnit,
-      next_supply: nextSupply,
+      total_doses: totalDoses,
       created_at: now,
     },
     assignments_created: petIds.length,
@@ -356,11 +365,11 @@ async function createPetService({userId, body}) {
 }
 
 async function createRoutineService({userId, body}) {
-  const rawTitle = required(body.title || body.name, "title");
-  const title = String(rawTitle).trim();
-  const titleRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ'., ]+$/;
-  if (title.length < 2 || title.length > 50 || !titleRegex.test(title)) {
-    const e = new Error("Invalid title"); e.status = 400; throw e;
+  const rawRoutineName = required(body.routine_name || body.title || body.name, "routine_name");
+  const routineName = String(rawRoutineName).trim();
+  const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ'., ]+$/;
+  if (routineName.length < 2 || routineName.length > 50 || !nameRegex.test(routineName)) {
+    const e = new Error("Invalid routine_name"); e.status = 400; throw e;
   }
 
   const startInput = required(body.start_of_activity, "start_of_activity");
@@ -410,10 +419,10 @@ async function createRoutineService({userId, body}) {
     requestBody: {values: [[
       routineId,
       userId,
-      title,
+      routineName,
+      String(startISO),
       String(n),
       String(unit),
-      String(startISO),
       now,
     ]]},
   });
@@ -434,12 +443,12 @@ async function createRoutineService({userId, body}) {
   if (assignments.length > 0) {
     const values = assignments.map(a => [
       a.assignment_id,
-      a.user_id,
-      a.pet_id,
       a.routine_id,
+      a.pet_id,
+      a.user_id,
+      a.assigned_at,
       a.last_performed_at,
       a.next_activity,
-      a.assigned_at,
     ]);
     await sheets.spreadsheets.values.append({
       spreadsheetId,
@@ -452,7 +461,7 @@ async function createRoutineService({userId, body}) {
 
   const activityId = admin.firestore().collection("_ids").doc().id;
   const details = JSON.stringify({
-    title,
+    routine_name: routineName,
     start_of_activity: startISO,
     perform_every_number: n,
     perform_every_unit: unit,
@@ -478,7 +487,7 @@ async function createRoutineService({userId, body}) {
     routine: {
       routine_id: routineId,
       user_id: userId,
-      title,
+      routine_name: routineName,
       perform_every_number: Number(n),
       perform_every_unit: String(unit),
       start_of_activity: String(startISO),
