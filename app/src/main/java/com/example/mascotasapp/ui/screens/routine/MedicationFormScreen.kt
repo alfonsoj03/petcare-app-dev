@@ -160,7 +160,7 @@ fun MedicationFormScreen(
                             .padding(16.dp)
                             .navigationBarsPadding()
                     ) {
-                        ElevatedButton(
+                        Button(
                             onClick = {
                                 nameError = validateName(medName)
                                 dateTimeError = validateDateTime(dateTime)
@@ -176,7 +176,11 @@ fun MedicationFormScreen(
                                 .fillMaxWidth()
                                 .height(48.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = purple, contentColor = Color.White),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = purple,
+                                contentColor = Color.White,
+                                disabledContainerColor = Color(0xFFDDD6FE)
+                            ),
                             enabled = formValid
                         ) {
                             Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)

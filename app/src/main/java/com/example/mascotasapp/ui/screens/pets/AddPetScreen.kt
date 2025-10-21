@@ -182,7 +182,7 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                             .padding(16.dp)
                             .windowInsetsPadding(WindowInsets.navigationBars)
                     ) {
-                        ElevatedButton(
+                        Button(
                             onClick = {
                                 nameError = null
                                 speciesError = null
@@ -262,7 +262,11 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                                 .fillMaxWidth()
                                 .height(48.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF8B5CF6),
+                                contentColor = Color.White,
+                                disabledContainerColor = Color(0xFFDDD6FE)
+                            ),
                             enabled = formValid
                         ) { Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) }
                     }
