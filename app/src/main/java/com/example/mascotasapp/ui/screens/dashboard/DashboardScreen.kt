@@ -10,6 +10,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +46,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import org.json.JSONArray
 
 @Composable
 fun DashboardScreen(
@@ -56,6 +66,25 @@ fun DashboardScreen(
     onOpenPetProfile: () -> Unit = {},
     onOpenProfile: () -> Unit = {}
 ) {
+    // Determine if user has pets by calling the same emulator Cloud Function used in PetsScreen
+    var hasPets by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1"
+                val url = URL("$baseUrl/getPets")
+                val conn = (url.openConnection() as HttpURLConnection).apply { requestMethod = "GET"; connectTimeout = 8000; readTimeout = 8000 }
+                val code = conn.responseCode
+                val count = if (code in 200..299) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                    JSONArray(body).length()
+                } else 0
+                conn.disconnect()
+                withContext(Dispatchers.Main) { hasPets = count > 0 }
+            }
+        }.onFailure { hasPets = false }
+    }
+
     Scaffold(
         topBar = {
             Surface(color = Color.White, tonalElevation = 0.dp, shadowElevation = 0.dp) {
@@ -121,16 +150,79 @@ fun DashboardScreen(
         containerColor = Color(0xFFF9FAFB),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        LazyColumn(
+        val contentModifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+
+        when (hasPets) {
+            null -> { // loading: show nothing special to keep it light
+                Box(modifier = contentModifier)
+            }
+            false -> {
+                EmptyWelcome(onCreatePet = onAddPet, modifier = contentModifier)
+            }
+            else -> {
+                LazyColumn(
+                    modifier = contentModifier,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item { PetCard(onOpenHealth = onOpenHealth, onOpenRoutine = onOpenRoutine) }
+                    item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
+                    item { RecentActivitySection() }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyWelcome(onCreatePet: () -> Unit, modifier: Modifier = Modifier) {
+    val brandPurple = Color(0xFF8B5CF6)
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(color = Color(0xFFE5F4EE), shape = CircleShape) {
+            Icon(
+                imageVector = Icons.Filled.Pets,
+                contentDescription = null,
+                tint = Color(0xFF10B981),
+                modifier = Modifier
+                    .size(80.dp)
+                    .padding(16.dp)
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            text = "Welcome to\nPetCare!",
+            style = MaterialTheme.typography.headlineSmall,
+            color = Color(0xFF111827),
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Keep your pets happy and healthy with personalized care routines",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF6B7280),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onCreatePet,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = brandPurple,
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFFDDD6FE)
+            )
         ) {
-            item { PetCard(onOpenHealth = onOpenHealth, onOpenRoutine = onOpenRoutine) }
-            item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
-            item { RecentActivitySection() }
+            Text("Create New Pet")
         }
     }
 }
