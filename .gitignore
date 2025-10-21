@@ -29,6 +29,12 @@ $RECYCLE.BIN/
 # Xcode
 DerivedData/
 build/
+
+# ============================
+# Secrets / Keys
+# ============================
+# Ignore Google service account and other keys
+/sheets-api/functions/keys/**
 *.xcworkspace
 *.xcodeproj/project.xcworkspace/
 *.xcodeproj/xcuserdata/
