@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MedicalServices
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Pets
@@ -47,9 +48,11 @@ import androidx.compose.foundation.clickable
 fun DashboardScreen(
     onOpenHealth: () -> Unit = {},
     onOpenRoutine: () -> Unit = {},
-    onRegisterBath: () -> Unit = {},
-    onRegisterVisit: () -> Unit = {},
-    onRegisterFeeding: () -> Unit = {},
+    onAddVisit: () -> Unit = {},
+    onAddMedication: () -> Unit = {},
+    onAddRoutine: () -> Unit = {},
+    onAddPet: () -> Unit = {},
+    addPetIconResId: Int? = null,
     onOpenPetProfile: () -> Unit = {},
     onOpenProfile: () -> Unit = {}
 ) {
@@ -126,7 +129,7 @@ fun DashboardScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item { PetCard(onOpenHealth = onOpenHealth, onOpenRoutine = onOpenRoutine) }
-            item { QuickLogSection(onRegisterBath, onRegisterVisit, onRegisterFeeding) }
+            item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
             item { RecentActivitySection() }
         }
     }
@@ -204,26 +207,28 @@ private fun InfoRowCard(title: String, subtitle: String, icon: androidx.compose.
 
 @Composable
 private fun QuickLogSection(
-    onRegisterBath: () -> Unit,
-    onRegisterVisit: () -> Unit,
-    onRegisterFeeding: () -> Unit
+    onAddVisit: () -> Unit,
+    onAddMedication: () -> Unit,
+    onAddRoutine: () -> Unit,
+    onAddPet: () -> Unit,
+    addPetIconResId: Int?
 ) {
     Text(text = "Quick Log", style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(8.dp))
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionCard(
-                title = "Vet Visit",
+                title = "Add Visit",
                 icon = Icons.Default.MedicalServices,
-                onClick = onRegisterVisit,
+                onClick = onAddVisit,
                 lightBg = Color(0xFFDBEAFE),
                 darkAccent = Color(0xFF2563EB),
                 modifier = Modifier.weight(1f)
             )
             QuickActionCard(
-                title = "Bath",
-                icon = Icons.Default.Opacity,
-                onClick = onRegisterBath,
+                title = "Add Medication",
+                icon = Icons.Default.Vaccines,
+                onClick = onAddMedication,
                 lightBg = Color(0xFFCFFAFE),
                 darkAccent = Color(0xFF0891B2),
                 modifier = Modifier.weight(1f)
@@ -231,20 +236,21 @@ private fun QuickLogSection(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionCard(
-                title = "Dental",
-                icon = Icons.Default.MedicalServices,
-                onClick = onRegisterVisit,
+                title = "Add Routine",
+                icon = Icons.Default.Schedule,
+                onClick = onAddRoutine,
                 lightBg = Color(0xFFDCFCE7),
                 darkAccent = Color(0xFF16A34A),
                 modifier = Modifier.weight(1f)
             )
             QuickActionCard(
-                title = "Feeding",
-                icon = Icons.Default.Restaurant,
-                onClick = onRegisterFeeding,
+                title = "Add pet",
+                icon = Icons.Default.Pets,
+                onClick = onAddPet,
                 lightBg = Color(0xFFFFEDD5),
                 darkAccent = Color(0xFFEA580C),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                painterResId = addPetIconResId
             )
         }
     }
@@ -257,7 +263,8 @@ private fun QuickActionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     lightBg: Color = MaterialTheme.colorScheme.surface,
-    darkAccent: Color = MaterialTheme.colorScheme.primary
+    darkAccent: Color = MaterialTheme.colorScheme.primary,
+    painterResId: Int? = null
 ) {
     Box(
         modifier = modifier
@@ -286,14 +293,24 @@ private fun QuickActionCard(
                     color = lightBg,
                     shape = CircleShape
                 ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = darkAccent,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .padding(8.dp)
-                    )
+                    if (painterResId != null) {
+                        Image(
+                            painter = painterResource(id = painterResId),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .padding(8.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = darkAccent,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .padding(8.dp)
+                        )
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(

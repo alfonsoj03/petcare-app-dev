@@ -214,7 +214,12 @@ fun AppRoot() {
             }
             composable(Destinations.Dashboard.route) {
                 DashboardScreen(
-                    onOpenProfile = { navController.navigate(Destinations.Profile.route) }
+                    onOpenProfile = { navController.navigate(Destinations.Profile.route) },
+                    onAddVisit = { navController.navigate(Destinations.AddVisit.route) },
+                    onAddMedication = { navController.navigate(Destinations.MedicationAdd.route) },
+                    onAddRoutine = { navController.navigate(Destinations.RoutineAdd.route) },
+                    onAddPet = { navController.navigate(Destinations.AddPet.route) },
+                    addPetIconResId = R.drawable.cat_ndog
                 )
             }
             composable(Destinations.Health.route) {
