@@ -33,16 +33,19 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.text.input.TextFieldValue
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 
 @Composable
 fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
     var name by remember { mutableStateOf("") }
     var speciesExpanded by remember { mutableStateOf(false) }
-    val speciesOptions = listOf("Dog", "Cat", "Other")
+    val speciesOptions = listOf("Dog", "Cat", "Rabbit", "Bird", "Other")
     var species by remember { mutableStateOf("") }
 
     var sexExpanded by remember { mutableStateOf(false) }
-    val sexOptions = listOf("Male", "Female")
+    val sexOptions = listOf("Male", "Female", "Unknown")
     var sex by remember { mutableStateOf("") }
 
     var breed by remember { mutableStateOf("") }
@@ -50,9 +53,99 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
     var weight by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
 
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var speciesError by remember { mutableStateOf<String?>(null) }
+    var sexError by remember { mutableStateOf<String?>(null) }
+    var breedError by remember { mutableStateOf<String?>(null) }
+    var dobError by remember { mutableStateOf<String?>(null) }
+    var weightError by remember { mutableStateOf<String?>(null) }
+    var colorError by remember { mutableStateOf<String?>(null) }
+
     val ctx = LocalContext.current
     val scope = remember { CoroutineScope(Dispatchers.IO) }
     val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1" // Emulator Functions base (host loopback for Android emulator)
+
+    // Validators
+    fun validateName(v: String): String? {
+        val t = v.trim()
+        val regex = Regex("^[A-Za-zÁÉÍÓÚáéíóúÑñ'., ]+$")
+        return when {
+            t.isEmpty() -> "Required"
+            t.length < 2 -> "Min 2 characters"
+            t.length > 50 -> "Max 50 characters"
+            !regex.matches(t) -> "Only letters, spaces, ', ."
+            else -> null
+        }
+    }
+    fun validateSpecies(v: String): String? = when {
+        v.isBlank() -> "Required"
+        !speciesOptions.contains(v) -> "Invalid option"
+        else -> null
+    }
+    fun validateSex(v: String): String? = when {
+        v.isBlank() -> "Required"
+        !sexOptions.contains(v) -> "Invalid option"
+        else -> null
+    }
+    fun validateBreed(v: String): String? {
+        val t = v.trim()
+        val regex = Regex("^[A-Za-zÁÉÍÓÚáéíóúÑñ'., ]+$")
+        return when {
+            t.isEmpty() -> "Required"
+            t.length < 2 -> "Min 2 characters"
+            t.length > 50 -> "Max 50 characters"
+            !regex.matches(t) -> "Only letters, spaces, ', ."
+            else -> null
+        }
+    }
+    fun validateDob(v: String): String? {
+        val t = v.trim()
+        if (t.isEmpty()) return "Required"
+        val pattern = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+        if (!pattern.matches(t)) return "Format YYYY-MM-DD"
+        return try {
+            val date = LocalDate.parse(t)
+            val today = LocalDate.now()
+            when {
+                date.isAfter(today) -> "Cannot be in the future"
+                date.year < 1900 -> "Year must be ≥ 1900"
+                date.isBefore(today.minusYears(40)) -> "Unrealistic age"
+                else -> null
+            }
+        } catch (e: DateTimeParseException) {
+            "Invalid date"
+        }
+    }
+    fun validateWeight(v: String): String? {
+        val t = v.trim()
+        if (t.isEmpty()) return "Required"
+        val intRegex = Regex("^\\d+$")
+        if (!intRegex.matches(t)) return "Positive integer"
+        val n = t.toIntOrNull() ?: return "Positive integer"
+        return if (n <= 0) "Must be > 0" else null
+    }
+    fun validateColor(v: String): String? {
+        val t = v.trim()
+        if (t.isEmpty()) return "Required"
+        val colorRegex = Regex("^[A-Za-z ]+$")
+        return when {
+            !colorRegex.matches(t) -> "Only letters and spaces"
+            t.length > 30 -> "Max 30 characters"
+            else -> null
+        }
+    }
+
+    val formValid by remember(name, species, sex, breed, dob, weight, color) {
+        mutableStateOf(
+            validateName(name) == null &&
+                validateSpecies(species) == null &&
+                validateSex(sex) == null &&
+                validateBreed(breed) == null &&
+                validateDob(dob) == null &&
+                validateWeight(weight) == null &&
+                validateColor(color) == null
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -90,12 +183,87 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                             .windowInsetsPadding(WindowInsets.navigationBars)
                     ) {
                         ElevatedButton(
-                            onClick = onAdd,
+                            onClick = {
+                                nameError = null
+                                speciesError = null
+                                sexError = null
+                                breedError = null
+                                dobError = null
+                                weightError = null
+                                colorError = null
+
+                                val nameT = name.trim()
+                                val breedT = breed.trim()
+                                val dobT = dob.trim()
+                                val weightT = weight.trim()
+                                val colorT = color.trim()
+
+                                val nameRegex = Regex("^[A-Za-zÁÉÍÓÚáéíóúÑñ'., ]+$")
+                                if (nameT.isEmpty()) nameError = "Required" else if (nameT.length < 2) nameError = "Min 2 characters" else if (nameT.length > 50) nameError = "Max 50 characters" else if (!nameRegex.matches(nameT)) nameError = "Only letters, spaces, ', ."
+
+                                if (species.isBlank()) speciesError = "Required" else if (!speciesOptions.contains(species)) speciesError = "Invalid option"
+
+                                if (sex.isBlank()) sexError = "Required" else if (!sexOptions.contains(sex)) sexError = "Invalid option"
+
+                                if (breedT.isEmpty()) breedError = "Required" else if (breedT.length < 2) breedError = "Min 2 characters" else if (breedT.length > 50) breedError = "Max 50 characters" else if (!nameRegex.matches(breedT)) breedError = "Only letters, spaces, ', ."
+
+                                if (dobT.isEmpty()) {
+                                    dobError = "Required"
+                                } else {
+                                    val pattern = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+                                    if (!pattern.matches(dobT)) {
+                                        dobError = "Format YYYY-MM-DD"
+                                    } else {
+                                        try {
+                                            val date = LocalDate.parse(dobT)
+                                            val today = LocalDate.now()
+                                            if (date.isAfter(today)) {
+                                                dobError = "Cannot be in the future"
+                                            } else if (date.year < 1900) {
+                                                dobError = "Year must be ≥ 1900"
+                                            } else {
+                                                val fortyYearsAgo = today.minusYears(40)
+                                                if (date.isBefore(fortyYearsAgo)) {
+                                                    dobError = "Unrealistic age"
+                                                }
+                                            }
+                                        } catch (e: DateTimeParseException) {
+                                            dobError = "Invalid date"
+                                        }
+                                    }
+                                }
+
+                                if (weightT.isEmpty()) {
+                                    weightError = "Required"
+                                } else {
+                                    val intRegex = Regex("^\\d+$")
+                                    if (!intRegex.matches(weightT)) {
+                                        weightError = "Positive integer"
+                                    } else if (weightT.toIntOrNull()?.let { it <= 0 } != false) {
+                                        weightError = "Must be > 0"
+                                    }
+                                }
+
+                                if (colorT.isEmpty()) {
+                                    colorError = "Required"
+                                } else {
+                                    val colorRegex = Regex("^[A-Za-z ]+$")
+                                    if (!colorRegex.matches(colorT)) {
+                                        colorError = "Only letters and spaces"
+                                    } else if (colorT.length > 30) {
+                                        colorError = "Max 30 characters"
+                                    }
+                                }
+
+                                val valid = listOf(nameError, speciesError, sexError, breedError, dobError, weightError, colorError).all { it == null }
+                                if (valid) onAdd()
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White)
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6), contentColor = Color.White),
+                            enabled = formValid
                         ) { Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) }
                     }
                 }
@@ -130,12 +298,19 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
 
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = {
+                    name = it
+                    nameError = validateName(it)
+                },
                 label = { Text("Pet Name *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = nameError != null,
                 shape = RoundedCornerShape(12.dp)
             )
+            if (nameError != null) {
+                Text(nameError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 ExposedDropdownMenuBox(expanded = speciesExpanded, onExpandedChange = { speciesExpanded = !speciesExpanded }, modifier = Modifier.weight(1f)) {
@@ -146,16 +321,21 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                         label = { Text("Species *") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = speciesExpanded) },
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        isError = speciesError != null
                     )
                     ExposedDropdownMenu(expanded = speciesExpanded, onDismissRequest = { speciesExpanded = false }) {
                         speciesOptions.forEach { option ->
                             DropdownMenuItem(text = { Text(option) }, onClick = {
                                 species = option
+                                speciesError = validateSpecies(option)
                                 speciesExpanded = false
                             })
                         }
                     }
+                }
+                if (speciesError != null) {
+                    Text(speciesError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
 
                 ExposedDropdownMenuBox(expanded = sexExpanded, onExpandedChange = { sexExpanded = !sexExpanded }, modifier = Modifier.weight(1f)) {
@@ -166,59 +346,92 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                         label = { Text("Sex *") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sexExpanded) },
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        isError = sexError != null
                     )
                     ExposedDropdownMenu(expanded = sexExpanded, onDismissRequest = { sexExpanded = false }) {
                         sexOptions.forEach { option ->
                             DropdownMenuItem(text = { Text(option) }, onClick = {
                                 sex = option
+                                sexError = validateSex(option)
                                 sexExpanded = false
                             })
                         }
                     }
                 }
+                if (sexError != null) {
+                    Text(sexError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
             }
 
             OutlinedTextField(
                 value = breed,
-                onValueChange = { breed = it },
+                onValueChange = {
+                    breed = it
+                    breedError = validateBreed(it)
+                },
                 label = { Text("Breed *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = breedError != null,
                 shape = RoundedCornerShape(12.dp)
             )
+            if (breedError != null) {
+                Text(breedError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
 
             OutlinedTextField(
                 value = dob,
-                onValueChange = { dob = it },
-                label = { Text("Date of Birth") },
+                onValueChange = {
+                    dob = it
+                    dobError = validateDob(it)
+                },
+                label = { Text("Date of Birth (YYYY-MM-DD)") },
                 trailingIcon = { Icon(Icons.Filled.CalendarToday, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = dobError != null,
                 shape = RoundedCornerShape(12.dp)
             )
+            if (dobError != null) {
+                Text(dobError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = weight,
-                    onValueChange = { weight = it },
+                    onValueChange = {
+                        weight = it
+                        weightError = validateWeight(it)
+                    },
                     label = { Text("Weight *") },
-                    placeholder = { Text("0.0") },
+                    placeholder = { Text("10") },
                     trailingIcon = { Text("kg", color = Color(0xFF6B7280)) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
+                    isError = weightError != null,
                     shape = RoundedCornerShape(12.dp)
                 )
+                if (weightError != null) {
+                    Text(weightError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.align(Alignment.CenterVertically))
+                }
 
                 OutlinedTextField(
                     value = color,
-                    onValueChange = { color = it },
-                    label = { Text("Color") },
+                    onValueChange = {
+                        color = it
+                        colorError = validateColor(it)
+                    },
+                    label = { Text("Color *") },
                     placeholder = { Text("Pet color") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
+                    isError = colorError != null,
                     shape = RoundedCornerShape(12.dp)
                 )
+                if (colorError != null) {
+                    Text(colorError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.align(Alignment.CenterVertically))
+                }
             }
             Spacer(Modifier.height(8.dp))
         }

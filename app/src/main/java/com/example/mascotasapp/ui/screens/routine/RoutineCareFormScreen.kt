@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,11 +40,73 @@ fun RoutineCareFormScreen(
     var everyValue by remember { mutableStateOf(initialEveryValue) }
     var everyUnit by remember { mutableStateOf(initialEveryUnit) }
 
-    val units = listOf("minutes", "hours", "days", "weeks")
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var dateTimeError by remember { mutableStateOf<String?>(null) }
+    var everyValueError by remember { mutableStateOf<String?>(null) }
+    var everyUnitError by remember { mutableStateOf<String?>(null) }
+
+    val units = listOf("hours", "days", "weeks", "months")
     var unitMenuExpanded by remember { mutableStateOf(false) }
     var alsoBuddy by remember { mutableStateOf(initialAlsoBuddy) }
     var alsoLuna by remember { mutableStateOf(initialAlsoLuna) }
 
+    // Validators
+    fun validateName(v: String): String? {
+        val t = v.trim()
+        val regex = Regex("^[A-Za-zÁÉÍÓÚáéíóúÑñ'., ]+$")
+        return when {
+            t.isEmpty() -> "Required"
+            t.length < 2 -> "Min 2 characters"
+            t.length > 50 -> "Max 50 characters"
+            !regex.matches(t) -> "Only letters, spaces, ', ."
+            else -> null
+        }
+    }
+    fun validateDateTime(v: String): String? {
+        val t = v.trim()
+        if (t.isEmpty()) return "Required"
+        val pattern = Regex("^\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}$")
+        if (!pattern.matches(t)) return "Format YYYY-MM-DD HH:mm"
+        return try {
+            val parts = t.split(" ")
+            val datePart = parts[0]
+            val timePart = parts[1]
+            
+            val date = LocalDate.parse(datePart)
+            val today = LocalDate.now()
+            val timeParts = timePart.split(":")
+            val hour = timeParts[0].toInt()
+            val minute = timeParts[1].toInt()
+            
+            when {
+                date.isAfter(today) -> "Cannot be in the future"
+                date.year < 1900 -> "Year must be ≥ 1900"
+                date.isBefore(today.minusYears(40)) -> "Unrealistic age"
+                hour !in 0..23 -> "Invalid hour"
+                minute !in 0..59 -> "Invalid minute"
+                else -> null
+            }
+        } catch (e: Exception) {
+            "Invalid date/time"
+        }
+    }
+    fun validateEveryValue(v: String): String? {
+        val t = v.trim()
+        if (t.isEmpty()) return "Required"
+        if (!t.all { it.isDigit() }) return "Positive integer"
+        val n = t.toIntOrNull() ?: return "Positive integer"
+        return if (n <= 0) "Must be > 0" else null
+    }
+    fun validateEveryUnit(v: String): String? = if (v.isBlank()) "Required" else if (!units.contains(v)) "Invalid option" else null
+
+    val formValid by remember(careName, dateTime, everyValue, everyUnit) {
+        mutableStateOf(
+            validateName(careName) == null &&
+                validateDateTime(dateTime) == null &&
+                validateEveryValue(everyValue) == null &&
+                validateEveryUnit(everyUnit) == null
+        )
+    }
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -76,12 +139,21 @@ fun RoutineCareFormScreen(
                             .navigationBarsPadding()
                     ) {
                         ElevatedButton(
-                            onClick = { onConfirm(careName) },
+                            onClick = {
+                                nameError = validateName(careName)
+                                dateTimeError = validateDateTime(dateTime)
+                                everyValueError = validateEveryValue(everyValue)
+                                everyUnitError = validateEveryUnit(everyUnit)
+                                if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
+                                    onConfirm(careName)
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = purple, contentColor = Color.White)
+                            colors = ButtonDefaults.buttonColors(containerColor = purple, contentColor = Color.White),
+                            enabled = formValid
                         ) {
                             Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
                         }
@@ -100,33 +172,51 @@ fun RoutineCareFormScreen(
             item { LabeledField(label = "Care Name *") {
                 OutlinedTextField(
                     value = careName,
-                    onValueChange = { careName = it },
+                    onValueChange = {
+                        careName = it
+                        nameError = validateName(it)
+                    },
                     placeholder = { Text("Enter care name") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = nameError != null
                 )
+                if (nameError != null) {
+                    Text(nameError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
             }}
-            item { LabeledField(label = "First or latest performed execution *") {
+            item { LabeledField(label = "First or latest performed execution (YYYY-MM-DD HH:mm) *") {
                 OutlinedTextField(
                     value = dateTime,
-                    onValueChange = { dateTime = it },
-                    placeholder = { Text("mm/dd/yyyy, 10:00am") },
+                    onValueChange = {
+                        dateTime = it
+                        dateTimeError = validateDateTime(it)
+                    },
+                    placeholder = { Text("YYYY-MM-DD HH:mm") },
                     trailingIcon = { Icon(Icons.Filled.CalendarToday, contentDescription = null) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = dateTimeError != null
                 )
+                if (dateTimeError != null) {
+                    Text(dateTimeError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
             }}
             item { LabeledField(label = "Perform every *") {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
                         value = everyValue,
-                        onValueChange = { everyValue = it.filter { ch -> ch.isDigit() } },
+                        onValueChange = {
+                            everyValue = it.filter { ch -> ch.isDigit() }
+                            everyValueError = validateEveryValue(everyValue)
+                        },
                         placeholder = { Text("0") },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        isError = everyValueError != null
                     )
                     ExposedDropdownMenuBox(
                         expanded = unitMenuExpanded,
@@ -139,7 +229,8 @@ fun RoutineCareFormScreen(
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitMenuExpanded) },
-                            modifier = Modifier.menuAnchor().weight(1f)
+                            modifier = Modifier.menuAnchor().weight(1f),
+                            isError = everyUnitError != null
                         )
                         ExposedDropdownMenu(
                             expanded = unitMenuExpanded,
@@ -148,11 +239,18 @@ fun RoutineCareFormScreen(
                             units.forEach { option ->
                                 DropdownMenuItem(text = { Text(option) }, onClick = {
                                     everyUnit = option
+                                    everyUnitError = validateEveryUnit(option)
                                     unitMenuExpanded = false
                                 })
                             }
                         }
                     }
+                }
+                if (everyValueError != null) {
+                    Text(everyValueError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                if (everyUnitError != null) {
+                    Text(everyUnitError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }}
             item { Text("Also add to", style = MaterialTheme.typography.titleSmall) }

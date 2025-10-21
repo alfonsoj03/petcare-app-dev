@@ -12,7 +12,7 @@
         - Responder `{ assignment_id, last_performed_at, next_activity }`.
 2. `POST /medications/{med_id}/perform`
     - **Body**: `{ pet_id, given_at (ISO) }`
-    - **Acción**: igual flujo que acima, usando `medications` para intervalo y escribiendo en `medicationassignments.last_given_at` y `.next_supply`.
+    - **Acción**: igual flujo que arriba, usando `medications` para intervalo y escribiendo en `medicationassignments.last_given_at` y `.next_supply`.
 3. `GET /pets/{pet_id}/next-events?limit=N`
     - **Query**: `user_id` desde token, `limit` default 3.
     - **Acción**:
