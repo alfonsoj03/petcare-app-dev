@@ -1,15 +1,30 @@
 ## Endpoints / Cloud Functions a desarrollar
 
 1. `POST /routines/{routine_id}/perform`
-    - **Body**: `{ pet_id, performed_at (ISO) }`
-    - **Acción**:
-        - Verificar token Firebase → obtener `user_id`.
-        - Buscar `assignment` (row) por `routine_id`+`pet_id`+`user_id`.
-        - Actualizar `last_performed_at = performed_at`.
-        - Calcular `next = addInterval(performed_at, interval_number, interval_unit)` — donde `interval_*` vienen de la tabla `routines` (template).
-        - Escribir `next` en `routineassignments.next_activity`.
-        - Insertar fila en `activitylog` (action_type = `PERFORMED`, target_table=`routineassignments`, target_id=assignment_id, timestamp, details).
-        - Responder `{ assignment_id, last_performed_at, next_activity }`.
+
+- **Body**: `{ "pet_id": "UUID", "performed_at": "2025-10-21T14:30:00Z" }`
+- **Acción**:
+    - Verificar token recibido → obtener user_id.
+    - Buscar routine por routine_id y user_id.
+        - Si no existe → responder 404 Not Found.
+    - Buscar assignment en routineassignments por routine_id + pet_id + user_id.
+        - Si no existe → responder 404 Not Found.
+    - Obtener de la rutina los valores:
+        - perform_every_number
+        - perform_every_unit
+    - Calcular:
+        - next_activity = addInterval(performed_at, perform_every_number, perform_every_unit)
+    - Actualizar la fila en routineassignments:
+        - last_performed_at = performed_at
+        - next_activity = next_activity
+    - Insertar una fila en activitylog:
+        - action_type = "perform_routine"
+        - target_table = "routineassignments"
+        - target_id = assignment_id
+        - timestamp = performed_at
+        - details = { "next_activity": next_activity }
+        - user_id = user_id (del token)
+    - Responder: `{ "assignment_id": "UUID", "last_performed_at": "2025-10-21T14:30:00Z", "next_activity": "2025-11-04T14:30:00Z" }`
 2. `POST /medications/{med_id}/perform`
     - **Body**: `{ pet_id, given_at (ISO) }`
     - **Acción**: igual flujo que arriba, usando `medications` para intervalo y escribiendo en `medicationassignments.last_given_at` y `.next_supply`.
