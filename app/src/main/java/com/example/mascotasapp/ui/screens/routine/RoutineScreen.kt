@@ -45,21 +45,6 @@ fun RoutineScreen(
     onMarkDone: (String) -> Unit = {},
     onEditItem: (String) -> Unit = {},
     onEditMedication: (String) -> Unit = {}
-
-private fun formatDateTimePretty(raw: String?): String {
-    val s = raw?.trim().orEmpty()
-    if (s.isBlank()) return "--"
-    val zone = ZoneId.systemDefault()
-    val fmt = DateTimeFormatter.ofPattern("MMM d, yyyy, h:mm a", Locale.getDefault())
-    // Try ISO Instant (e.g., 2025-10-13T06:00:00.000Z)
-    runCatching { Instant.parse(s).atZone(zone).format(fmt) }.onSuccess { return it }
-    // Try ISO local datetime with space or T (e.g., 2025-10-13 06:00)
-    val normalized = if (s.matches(Regex("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$"))) s.replace(' ', 'T') else s
-    runCatching { LocalDateTime.parse(normalized).atZone(zone).format(fmt) }.onSuccess { return it }
-    // Try date only -> show date like medication (no time available)
-    runCatching { LocalDate.parse(s).format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())) }.onSuccess { return it }
-    return s
-}
 ) {
     val routineViewModel: RoutineViewModel = viewModel()
     val uiState = routineViewModel.uiState
@@ -355,4 +340,16 @@ private fun MedicationCard(
             Text("Next dose: $nextDose", style = MaterialTheme.typography.bodySmall, color = Color.Black)
         }
     }
+}
+
+private fun formatDateTimePretty(raw: String?): String {
+    val s = raw?.trim().orEmpty()
+    if (s.isBlank()) return "--"
+    val zone = ZoneId.systemDefault()
+    val fmt = DateTimeFormatter.ofPattern("MMM d, yyyy, h:mm a", Locale.getDefault())
+    runCatching { Instant.parse(s).atZone(zone).format(fmt) }.onSuccess { return it }
+    val normalized = if (s.matches(Regex("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$"))) s.replace(' ', 'T') else s
+    runCatching { LocalDateTime.parse(normalized).atZone(zone).format(fmt) }.onSuccess { return it }
+    runCatching { LocalDate.parse(s).format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())) }.onSuccess { return it }
+    return s
 }

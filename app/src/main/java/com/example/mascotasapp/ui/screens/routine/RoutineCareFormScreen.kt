@@ -21,6 +21,7 @@ import com.example.mascotasapp.core.ApiConfig
 import com.example.mascotasapp.core.SelectedPetStore
 import com.example.mascotasapp.core.JsonUtils
 import com.example.mascotasapp.data.repository.RoutinesRepository
+import com.example.mascotasapp.ui.components.LabeledField
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -173,19 +174,30 @@ fun RoutineCareFormScreen(
                                 if (valid) {
                                     val petId = SelectedPetStore.get()
                                     if (petId.isNullOrBlank()) {
-                                        scope.launch(Dispatchers.Main) { snackbarHostState.showSnackbar("Select a pet first") }
+                                        scope.launch(Dispatchers.Main) {
+                                            snackbarHostState.showSnackbar(
+                                                "Select a pet first"
+                                            )
+                                        }
                                     } else {
                                         isSubmitting = true
                                         scope.launch {
                                             try {
                                                 if (!isEdit) {
                                                     val url = URL(baseUrl + "/createRoutine")
-                                                    val conn = (url.openConnection() as HttpURLConnection).apply {
-                                                        requestMethod = "POST"
-                                                        doOutput = true
-                                                        setRequestProperty("Content-Type", "application/json")
-                                                        setRequestProperty("X-Debug-Uid", "dev-user")
-                                                    }
+                                                    val conn =
+                                                        (url.openConnection() as HttpURLConnection).apply {
+                                                            requestMethod = "POST"
+                                                            doOutput = true
+                                                            setRequestProperty(
+                                                                "Content-Type",
+                                                                "application/json"
+                                                            )
+                                                            setRequestProperty(
+                                                                "X-Debug-Uid",
+                                                                "dev-user"
+                                                            )
+                                                        }
                                                     val alsoIds = ui.alsoAddToPetIds.toList()
                                                     val assignJson = buildString {
                                                         append("[")
@@ -199,19 +211,40 @@ fun RoutineCareFormScreen(
                                                     val payload = """
                                                         {
                                                           "routine_name": ${JsonUtils.q(careName.trim())},
-                                                          "start_of_activity": ${JsonUtils.q(dateTime.trim())},
-                                                          "perform_every_number": ${JsonUtils.q(everyValue.trim())},
-                                                          "perform_every_unit": ${JsonUtils.q(everyUnit.trim())},
+                                                          "start_of_activity": ${
+                                                        JsonUtils.q(
+                                                            dateTime.trim()
+                                                        )
+                                                    },
+                                                          "perform_every_number": ${
+                                                        JsonUtils.q(
+                                                            everyValue.trim()
+                                                        )
+                                                    },
+                                                          "perform_every_unit": ${
+                                                        JsonUtils.q(
+                                                            everyUnit.trim()
+                                                        )
+                                                    },
                                                           "assign_to_pets": $assignJson
                                                         }
                                                     """.trimIndent()
-                                                    conn.outputStream.use { os -> java.io.OutputStreamWriter(os).use { it.write(payload) } }
+                                                    conn.outputStream.use { os ->
+                                                        java.io.OutputStreamWriter(
+                                                            os
+                                                        ).use { it.write(payload) }
+                                                    }
                                                     val code = conn.responseCode
-                                                    val resp = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+                                                    val resp =
+                                                        (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()
+                                                            ?.use { it.readText() } ?: ""
                                                     withContext(Dispatchers.Main) {
                                                         if (code in 200..299) {
                                                             snackbarHostState.showSnackbar("Routine created")
-                                                            RoutinesRepository.refresh(baseUrl, petId)
+                                                            RoutinesRepository.refresh(
+                                                                baseUrl,
+                                                                petId
+                                                            )
                                                             onConfirm(careName)
                                                         } else {
                                                             snackbarHostState.showSnackbar("Error $code: $resp")
@@ -220,22 +253,38 @@ fun RoutineCareFormScreen(
                                                 } else {
                                                     // Edit -> PUT /routines
                                                     val url = URL(baseUrl + "/routines")
-                                                    val conn = (url.openConnection() as HttpURLConnection).apply {
-                                                        requestMethod = "PUT"
-                                                        doOutput = true
-                                                        setRequestProperty("Content-Type", "application/json")
-                                                        setRequestProperty("X-Debug-Uid", "dev-user")
-                                                    }
+                                                    val conn =
+                                                        (url.openConnection() as HttpURLConnection).apply {
+                                                            requestMethod = "PUT"
+                                                            doOutput = true
+                                                            setRequestProperty(
+                                                                "Content-Type",
+                                                                "application/json"
+                                                            )
+                                                            setRequestProperty(
+                                                                "X-Debug-Uid",
+                                                                "dev-user"
+                                                            )
+                                                        }
                                                     // In a follow-up we can pass routine_id from nav args; for now using name as placeholder is not sufficient.
                                                     // This block will be completed when edit wiring is defined with IDs.
                                                     val payload = "{}"
-                                                    conn.outputStream.use { os -> java.io.OutputStreamWriter(os).use { it.write(payload) } }
+                                                    conn.outputStream.use { os ->
+                                                        java.io.OutputStreamWriter(
+                                                            os
+                                                        ).use { it.write(payload) }
+                                                    }
                                                     val code = conn.responseCode
-                                                    val resp = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+                                                    val resp =
+                                                        (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()
+                                                            ?.use { it.readText() } ?: ""
                                                     withContext(Dispatchers.Main) {
                                                         if (code in 200..299) {
                                                             snackbarHostState.showSnackbar("Routine updated")
-                                                            RoutinesRepository.refresh(baseUrl, petId)
+                                                            RoutinesRepository.refresh(
+                                                                baseUrl,
+                                                                petId
+                                                            )
                                                             onConfirm(careName)
                                                         } else {
                                                             snackbarHostState.showSnackbar("Error $code: $resp")
@@ -243,13 +292,19 @@ fun RoutineCareFormScreen(
                                                     }
                                                 }
                                             } catch (e: Exception) {
-                                                withContext(Dispatchers.Main) { snackbarHostState.showSnackbar("Network error: ${e.message}") }
+                                                withContext(Dispatchers.Main) {
+                                                    snackbarHostState.showSnackbar(
+                                                        "Network error: ${e.message}"
+                                                    )
+                                                }
                                             } finally {
-                                                withContext(Dispatchers.Main) { isSubmitting = false }
+                                                withContext(Dispatchers.Main) {
+                                                    isSubmitting = false
+                                                }
                                             }
                                         }
                                     }
-                                // Navigation is handled after network success; avoid duplicate callbacks here
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -407,10 +462,4 @@ fun RoutineCareFormScreen(
     }
 }
 
-@Composable
-private fun LabeledField(label: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
-        content()
-    }
-}
+ 

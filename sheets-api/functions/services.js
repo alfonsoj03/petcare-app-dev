@@ -92,11 +92,15 @@ async function updateRoutineService({userId, body}) {
 
   const everyNumRaw = required(body.perform_every_number, "perform_every_number");
   const n = Number(everyNumRaw);
-  if (!Number.isInteger(n) || n <= 0) { const e = new Error("perform_every_number must be a positive integer"); e.status = 400; throw e; }
+  if (!Number.isInteger(n) || n <= 0) {
+    const e = new Error("perform_every_number must be a positive integer"); e.status = 400; throw e;
+  }
   const everyUnitRaw = required(body.perform_every_unit, "perform_every_unit");
   const unit = String(everyUnitRaw || "").toLowerCase();
   const allowedUnits = new Set(["hour", "hours", "day", "days", "week", "weeks", "month", "months"]);
-  if (!allowedUnits.has(unit)) { const e = new Error("perform_every_unit must be one of hours|days|weeks|months"); e.status = 400; throw e; }
+  if (!allowedUnits.has(unit)) {
+    const e = new Error("perform_every_unit must be one of hours|days|weeks|months"); e.status = 400; throw e;
+  }
 
   const spreadsheetId = ensureSpreadsheetId();
   const sheets = await getSheetsClient();
@@ -206,7 +210,9 @@ async function updatePetService({userId, body}) {
       foundIndex = i; break;
     }
   }
-  if (foundIndex === -1) { const e = new Error("Pet not found"); e.status = 404; throw e; }
+  if (foundIndex === -1) {
+    const e = new Error("Pet not found"); e.status = 404; throw e;
+  }
 
   const rowNumber = foundIndex + 1; // account for header
   // Update columns: C name, D imageUrl, E species, F sex, G breed, H dob, I weight, J color

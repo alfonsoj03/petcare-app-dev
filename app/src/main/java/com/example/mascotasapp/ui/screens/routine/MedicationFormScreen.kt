@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import com.example.mascotasapp.ui.components.LabeledField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -371,10 +372,4 @@ fun MedicationFormScreen(
     }
 }
 
-@Composable
-private fun LabeledField(label: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
-        content()
-    }
-}
+ 
