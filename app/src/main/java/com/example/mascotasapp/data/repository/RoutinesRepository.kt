@@ -9,8 +9,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.Instant
 import java.time.format.DateTimeFormatter
 
 object RoutinesRepository {
@@ -49,7 +47,7 @@ object RoutinesRepository {
     fun routinesFlow(petId: String): StateFlow<List<RoutineItem>> = perPetCache.getOrPut(petId) { MutableStateFlow(loadCache(petId)) }
 
     suspend fun refresh(baseUrl: String, petId: String) {
-        val url = URL("$baseUrl/getRoutines?pet_id=$petId")
+        val url = URL("$baseUrl/pets/$petId/routines")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             setRequestProperty("X-Debug-Uid", "dev-user")
@@ -76,6 +74,13 @@ object RoutinesRepository {
         val sorted = current.sortedBy { parseDate(it.next_activity) }
         flow.value = sorted
         saveCache(petId, JSONArray(sorted.map { toJson(it) }).toString())
+    }
+
+    fun deleteRoutine(petId: String, assignmentId: String) {
+        val flow = perPetCache.getOrPut(petId) { MutableStateFlow(loadCache(petId)) }
+        val filtered = flow.value.filterNot { it.assignment_id == assignmentId }
+        flow.value = filtered
+        saveCache(petId, JSONArray(filtered.map { toJson(it) }).toString())
     }
 
     private fun saveCache(petId: String, json: String) {
@@ -127,17 +132,13 @@ object RoutinesRepository {
     }
 
     private val dtf: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    private fun parseDate(v: String): LocalDateTime {
-        // Try ISO first, then fallback to custom format
-        runCatching { return Instant.parse(v).atZone(ZoneId.systemDefault()).toLocalDateTime() }
-        return runCatching { LocalDateTime.parse(v, dtf) }.getOrElse { LocalDateTime.MIN }
-    }
+    private fun parseDate(v: String): LocalDateTime = runCatching { LocalDateTime.parse(v, dtf) }.getOrElse { LocalDateTime.MIN }
 
-    suspend fun createRoutine(baseUrl: String, petIds: List<String>, name: String, startOfActivity: String, everyNumber: String, everyUnit: String): List<RoutineItem> {
+    suspend fun createRoutine(baseUrl: String, petId: String, name: String, startOfActivity: String, everyNumber: String, everyUnit: String): RoutineItem {
         require(name.isNotBlank())
         require(everyNumber.isNotBlank())
         LocalDateTime.parse(startOfActivity, dtf)
-        val url = URL("$baseUrl/createRoutine")
+        val url = URL("$baseUrl/routines")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
@@ -145,45 +146,37 @@ object RoutinesRepository {
             setRequestProperty("X-Debug-Uid", "dev-user")
         }
         val payload = JSONObject().apply {
+            put("pet_id", petId)
             put("routine_name", name)
             put("start_of_activity", startOfActivity)
             put("perform_every_number", everyNumber)
             put("perform_every_unit", everyUnit)
-            put("assign_to_pets", JSONArray(petIds))
         }.toString()
         conn.outputStream.use { it.write(payload.toByteArray()) }
         val code = conn.responseCode
         val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
         if (code !in 200..299) throw RuntimeException("create routine error $code: $body")
         val obj = JSONObject(body)
-        val routine = obj.getJSONObject("routine")
-        val assignments = obj.optJSONArray("assignments") ?: JSONArray()
-        val created = ArrayList<RoutineItem>(assignments.length())
-        for (i in 0 until assignments.length()) {
-            val a = assignments.getJSONObject(i)
-            val item = RoutineItem(
-                assignment_id = a.optString("assignment_id"),
-                routine_id = routine.optString("routine_id"),
-                pet_id = a.optString("pet_id"),
-                user_id = a.optString("user_id"),
-                routine_name = routine.optString("routine_name", name),
-                start_of_activity = routine.optString("start_of_activity", startOfActivity),
-                perform_every_number = routine.optString("perform_every_number", everyNumber),
-                perform_every_unit = routine.optString("perform_every_unit", everyUnit),
-                last_performed_at = a.optString("last_performed_at"),
-                next_activity = a.optString("next_activity"),
-                created_at = routine.optString("created_at")
-            )
-            created.add(item)
-        }
-        // Update cache for each pet
-        created.forEach { upsert(it.pet_id, it) }
-        return created
+        val item = RoutineItem(
+            assignment_id = obj.optString("assignment_id"),
+            routine_id = obj.optString("routine_id"),
+            pet_id = obj.optString("pet_id", petId),
+            user_id = obj.optString("user_id"),
+            routine_name = obj.optString("routine_name", name),
+            start_of_activity = obj.optString("start_of_activity", startOfActivity),
+            perform_every_number = obj.optString("perform_every_number", everyNumber),
+            perform_every_unit = obj.optString("perform_every_unit", everyUnit),
+            last_performed_at = obj.optString("last_performed_at"),
+            next_activity = obj.optString("next_activity", startOfActivity),
+            created_at = obj.optString("created_at")
+        )
+        upsert(petId, item)
+        return item
     }
 
     suspend fun updateRoutine(baseUrl: String, petId: String, assignmentId: String, name: String?, startOfActivity: String?, everyNumber: String?, everyUnit: String?): RoutineItem {
         if (startOfActivity != null) LocalDateTime.parse(startOfActivity, dtf)
-        val url = URL("$baseUrl/updateRoutine")
+        val url = URL("$baseUrl/routines")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "PUT"
             doOutput = true

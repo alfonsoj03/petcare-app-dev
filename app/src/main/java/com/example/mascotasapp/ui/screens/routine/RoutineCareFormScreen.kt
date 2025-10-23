@@ -98,6 +98,7 @@ fun RoutineCareFormScreen(
             val minute = timeParts[1].toInt()
             
             when {
+                date.isAfter(today) -> "Cannot be in the future"
                 date.year < 1900 -> "Year must be ≥ 1900"
                 date.isBefore(today.minusYears(40)) -> "Unrealistic age"
                 hour !in 0..23 -> "Invalid hour"
@@ -126,6 +127,7 @@ fun RoutineCareFormScreen(
         )
     }
     val snackbarHostState = remember { SnackbarHostState() }
+    var isSubmitting by remember { mutableStateOf(false) }
     val scope = remember { CoroutineScope(Dispatchers.IO) }
     val baseUrl = ApiConfig.BASE_URL
     val isEdit = title.contains("Edit", ignoreCase = true) || confirmButtonText.contains("Save", ignoreCase = true)
@@ -169,27 +171,42 @@ fun RoutineCareFormScreen(
                                 everyValueError = validateEveryValue(everyValue)
                                 everyUnitError = validateEveryUnit(everyUnit)
 
+                                // ✅ Si todo está válido:
                                 if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
-                                    vm.submitCreateRoutine(
-                                        context = context,
-                                        name = careName,
-                                        startDateTime = dateTime,
-                                        everyNumber = everyValue,
-                                        everyUnit = everyUnit
-                                    ) { ok ->
-                                        if (ok) {
-                                            // Show success, refresh routines, and navigate back
-                                            val petId = SelectedPetStore.get()
-                                            scope.launch {
-                                                withContext(Dispatchers.Main) {
-                                                    snackbarHostState.showSnackbar("Routine created")
-                                                }
-                                                if (!petId.isNullOrBlank()) {
-                                                    runCatching { RoutinesRepository.refresh(baseUrl, petId) }
+                                    isSubmitting = true
+                                    scope.launch {
+                                        vm.submitCreateRoutine(
+                                            context = context,
+                                            name = careName,
+                                            startDateTime = dateTime,
+                                            everyNumber = everyValue,
+                                            everyUnit = everyUnit
+                                        ) { ok ->
+                                            // ⚙️ Cuando termina la petición:
+                                            isSubmitting = false
+                                            scope.launch(Dispatchers.Main) {
+                                                if (ok) {
+                                                    // 🧾 Refrescar cache de rutinas
+                                                    withContext(Dispatchers.IO) {
+                                                        val selectedId = SelectedPetStore.get() ?: return@withContext
+                                                        RoutinesRepository.refresh(ApiConfig.BASE_URL, selectedId)
+                                                    }
+                                                    // 🎉 Mostrar snackbar de éxito
+                                                    snackbarHostState.showSnackbar(
+                                                        message = "Routine created successfully!",
+                                                        withDismissAction = true,
+                                                        duration = SnackbarDuration.Short
+                                                    )
+                                                    // 🔙 Volver a la pantalla anterior
+                                                    onBack()
+                                                } else {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = "Failed to create routine. Please try again.",
+                                                        withDismissAction = true,
+                                                        duration = SnackbarDuration.Short
+                                                    )
                                                 }
                                             }
-                                            onConfirm(careName)
-                                            onConfirmWithAlsoAdd(careName, ui.alsoAddToPetIds)
                                         }
                                     }
                                 }
@@ -203,9 +220,9 @@ fun RoutineCareFormScreen(
                                 contentColor = Color.White,
                                 disabledContainerColor = Color(0xFFDDD6FE)
                             ),
-                            enabled = formValid && !ui.submitting
+                            enabled = formValid && !isSubmitting
                         ) {
-                            if (ui.submitting) {
+                            if (isSubmitting) {
                                 CircularProgressIndicator(
                                     strokeWidth = 2.dp,
                                     modifier = Modifier.size(20.dp),
@@ -219,6 +236,7 @@ fun RoutineCareFormScreen(
                                 )
                             }
                         }
+
                     }
                 }
             }

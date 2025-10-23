@@ -57,7 +57,7 @@ import java.net.URL
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import org.json.JSONArray
-
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun DashboardScreen(
     onOpenHealth: () -> Unit = {},
@@ -89,23 +89,8 @@ fun DashboardScreen(
         snackbarHostState.showSnackbar("Selected pet: ${id ?: "none"}")
     }
     // Determine if user has pets by calling the same emulator Cloud Function used in PetsScreen
-    var hasPets by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(Unit) {
-        runCatching {
-            withContext(Dispatchers.IO) {
-                val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1"
-                val url = URL("$baseUrl/getPets")
-                val conn = (url.openConnection() as HttpURLConnection).apply { requestMethod = "GET"; connectTimeout = 8000; readTimeout = 8000 }
-                val code = conn.responseCode
-                val count = if (code in 200..299) {
-                    val body = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
-                    JSONArray(body).length()
-                } else 0
-                conn.disconnect()
-                withContext(Dispatchers.Main) { hasPets = count > 0 }
-            }
-        }.onFailure { hasPets = false }
-    }
+    val pets by PetsRepository.pets.collectAsStateWithLifecycle()
+    val hasPets = pets.isNotEmpty()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
