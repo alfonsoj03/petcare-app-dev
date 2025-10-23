@@ -82,12 +82,18 @@ class RoutineCareFormViewModel : ViewModel() {
                 RoutinesRepository.init(context)
                 val selectedId = SelectedPetStore.get() ?: throw IllegalStateException("No selected pet")
                 withContext(Dispatchers.IO) {
-                    RoutinesRepository.createRoutine(ApiConfig.BASE_URL, selectedId, name, startDateTime, everyNumber, everyUnit)
-                    if (uiState.alsoAddToPetIds.isNotEmpty()) {
-                        uiState.alsoAddToPetIds.forEach { otherId ->
-                            RoutinesRepository.createRoutine(ApiConfig.BASE_URL, otherId, name, startDateTime, everyNumber, everyUnit)
-                        }
+                    val petIds = buildList {
+                        add(selectedId)
+                        uiState.alsoAddToPetIds.forEach { add(it) }
                     }
+                    RoutinesRepository.createRoutine(
+                        ApiConfig.BASE_URL,
+                        petIds,
+                        name,
+                        startDateTime,
+                        everyNumber,
+                        everyUnit
+                    )
                 }
                 uiState = uiState.copy(submitting = false, submitSuccess = true)
                 onDone(true)

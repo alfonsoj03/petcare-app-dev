@@ -971,7 +971,26 @@ async function createRoutineService({userId, body}) {
   const spreadsheetId = ensureSpreadsheetId();
   const now = isoNow();
   const routineId = admin.firestore().collection("_ids").doc().id;
-  const nextActivity = addIntervalISO(startISO, n, unit);
+  // Compute last_performed_at and next_activity relative to now
+  const nowMs = new Date(now).getTime();
+  const startMs = new Date(startISO).getTime();
+  let lastPerformedAt = "";
+  let nextActivity = "";
+  if (startMs > nowMs) {
+    // Future start: last is empty, next is the start itself
+    nextActivity = startISO;
+  } else {
+    // Past start: last is the user-entered start, and next is the first future multiple
+    let candidate = new Date(startISO);
+    let safety = 0;
+    const maxSteps = 10000;
+    while (candidate.getTime() < nowMs && safety < maxSteps) {
+      candidate = new Date(addIntervalISO(candidate.toISOString(), n, unit));
+      safety++;
+    }
+    lastPerformedAt = startISO;
+    nextActivity = candidate.toISOString();
+  }
 
   const sheets = await getSheetsClient();
 
@@ -999,7 +1018,7 @@ async function createRoutineService({userId, body}) {
       user_id: userId,
       pet_id: pid,
       routine_id: routineId,
-      last_performed_at: "",
+      last_performed_at: lastPerformedAt,
       next_activity: nextActivity,
       assigned_at: now,
     });

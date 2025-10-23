@@ -98,7 +98,6 @@ fun RoutineCareFormScreen(
             val minute = timeParts[1].toInt()
             
             when {
-                date.isAfter(today) -> "Cannot be in the future"
                 date.year < 1900 -> "Year must be ≥ 1900"
                 date.isBefore(today.minusYears(40)) -> "Unrealistic age"
                 hour !in 0..23 -> "Invalid hour"
@@ -127,7 +126,6 @@ fun RoutineCareFormScreen(
         )
     }
     val snackbarHostState = remember { SnackbarHostState() }
-    var isSubmitting by remember { mutableStateOf(false) }
     val scope = remember { CoroutineScope(Dispatchers.IO) }
     val baseUrl = ApiConfig.BASE_URL
     val isEdit = title.contains("Edit", ignoreCase = true) || confirmButtonText.contains("Save", ignoreCase = true)
@@ -180,9 +178,18 @@ fun RoutineCareFormScreen(
                                         everyUnit = everyUnit
                                     ) { ok ->
                                         if (ok) {
+                                            // Show success, refresh routines, and navigate back
+                                            val petId = SelectedPetStore.get()
+                                            scope.launch {
+                                                withContext(Dispatchers.Main) {
+                                                    snackbarHostState.showSnackbar("Routine created")
+                                                }
+                                                if (!petId.isNullOrBlank()) {
+                                                    runCatching { RoutinesRepository.refresh(baseUrl, petId) }
+                                                }
+                                            }
                                             onConfirm(careName)
                                             onConfirmWithAlsoAdd(careName, ui.alsoAddToPetIds)
-                                            onBack()
                                         }
                                     }
                                 }

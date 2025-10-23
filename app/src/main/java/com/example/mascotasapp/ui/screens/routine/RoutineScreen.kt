@@ -14,6 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -28,6 +30,9 @@ import androidx.compose.foundation.lazy.items
 import com.example.mascotasapp.data.repository.RoutinesRepository
 import com.example.mascotasapp.core.SelectedPetStore
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -35,8 +40,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 
 import com.example.mascotasapp.ui.screens.routine.RoutineViewModel
+import com.example.mascotasapp.core.ApiConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,7 +100,15 @@ fun RoutineScreen(
         containerColor = bgSurface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
+        val context = LocalContext.current
+        LaunchedEffect(Unit) { SelectedPetStore.init(context); RoutinesRepository.init(context) }
         val selectedPetId by SelectedPetStore.selectedPetId.collectAsState(initial = null)
+        val scope = remember { CoroutineScope(Dispatchers.IO) }
+        LaunchedEffect(selectedPetId) {
+            if (!selectedPetId.isNullOrBlank()) {
+                scope.launch { runCatching { RoutinesRepository.refresh(ApiConfig.BASE_URL, selectedPetId!!) } }
+            }
+        }
         val routinesFlow = if (selectedPetId.isNullOrBlank()) {
             MutableStateFlow(emptyList<RoutinesRepository.RoutineItem>())
         } else {
