@@ -170,6 +170,7 @@ fun RoutineCareFormScreen(
                                 dateTimeError = validateDateTime(dateTime)
                                 everyValueError = validateEveryValue(everyValue)
                                 everyUnitError = validateEveryUnit(everyUnit)
+<<<<<<< HEAD
                                 val valid = listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }
                                 if (valid) {
                                     val petId = SelectedPetStore.get()
@@ -304,7 +305,24 @@ fun RoutineCareFormScreen(
                                             }
                                         }
                                     }
+                                // Navigation is handled after network success; avoid duplicate callbacks here
+=======
+                                if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
+                                    vm.submitCreateRoutine(
+                                        context = context,
+                                        name = careName,
+                                        startDateTime = dateTime,
+                                        everyNumber = everyValue,
+                                        everyUnit = everyUnit
+                                    ) { ok ->
+                                        if (ok) {
+                                            onConfirm(careName)
+                                            onConfirmWithAlsoAdd(careName, ui.alsoAddToPetIds)
+                                            onBack()
+                                        }
+                                    }
                                 }
+>>>>>>> 6e328f4 (feat:medicationsrepository; fix: health, routineform,routinerepository, routineformview, app)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -315,9 +333,15 @@ fun RoutineCareFormScreen(
                                 contentColor = Color.White,
                                 disabledContainerColor = Color(0xFFDDD6FE)
                             ),
+<<<<<<< HEAD
                             enabled = formValid && !isSubmitting
                         ) {
                             if (isSubmitting) {
+=======
+                            enabled = formValid && !ui.submitting
+                        ) {
+                            if (ui.submitting) {
+>>>>>>> 6e328f4 (feat:medicationsrepository; fix: health, routineform,routinerepository, routineformview, app)
                                 CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp), color = Color.White)
                             } else {
                                 Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
