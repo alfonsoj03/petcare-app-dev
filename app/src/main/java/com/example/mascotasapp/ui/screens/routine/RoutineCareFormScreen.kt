@@ -17,6 +17,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import com.example.mascotasapp.core.ApiConfig
+import com.example.mascotasapp.core.SelectedPetStore
+import com.example.mascotasapp.core.JsonUtils
+import com.example.mascotasapp.data.repository.RoutinesRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +117,14 @@ fun RoutineCareFormScreen(
                 validateEveryUnit(everyUnit) == null
         )
     }
+    val snackbarHostState = remember { SnackbarHostState() }
+    var isSubmitting by remember { mutableStateOf(false) }
+    val scope = remember { CoroutineScope(Dispatchers.IO) }
+    val baseUrl = ApiConfig.BASE_URL
+    val isEdit = title.contains("Edit", ignoreCase = true) || confirmButtonText.contains("Save", ignoreCase = true)
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(title, style = MaterialTheme.typography.titleLarge) },
@@ -144,8 +161,76 @@ fun RoutineCareFormScreen(
                                 dateTimeError = validateDateTime(dateTime)
                                 everyValueError = validateEveryValue(everyValue)
                                 everyUnitError = validateEveryUnit(everyUnit)
-                                if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
-                                    onConfirm(careName)
+                                val valid = listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }
+                                if (valid) {
+                                    val petId = SelectedPetStore.get()
+                                    if (petId.isNullOrBlank()) {
+                                        scope.launch(Dispatchers.Main) { snackbarHostState.showSnackbar("Select a pet first") }
+                                    } else {
+                                        isSubmitting = true
+                                        scope.launch {
+                                            try {
+                                                if (!isEdit) {
+                                                    val url = URL(baseUrl + "/createRoutine")
+                                                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                                                        requestMethod = "POST"
+                                                        doOutput = true
+                                                        setRequestProperty("Content-Type", "application/json")
+                                                        setRequestProperty("X-Debug-Uid", "dev-user")
+                                                    }
+                                                    val payload = """
+                                                        {
+                                                          "routine_name": ${JsonUtils.q(careName.trim())},
+                                                          "start_of_activity": ${JsonUtils.q(dateTime.trim())},
+                                                          "perform_every_number": ${JsonUtils.q(everyValue.trim())},
+                                                          "perform_every_unit": ${JsonUtils.q(everyUnit.trim())},
+                                                          "assign_to_pets": [${JsonUtils.q(petId)}]
+                                                        }
+                                                    """.trimIndent()
+                                                    conn.outputStream.use { os -> java.io.OutputStreamWriter(os).use { it.write(payload) } }
+                                                    val code = conn.responseCode
+                                                    val resp = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+                                                    withContext(Dispatchers.Main) {
+                                                        if (code in 200..299) {
+                                                            snackbarHostState.showSnackbar("Routine created")
+                                                            RoutinesRepository.refresh(baseUrl, petId)
+                                                            onConfirm(careName)
+                                                        } else {
+                                                            snackbarHostState.showSnackbar("Error $code: $resp")
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Edit -> PUT /routines
+                                                    val url = URL(baseUrl + "/routines")
+                                                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                                                        requestMethod = "PUT"
+                                                        doOutput = true
+                                                        setRequestProperty("Content-Type", "application/json")
+                                                        setRequestProperty("X-Debug-Uid", "dev-user")
+                                                    }
+                                                    // In a follow-up we can pass routine_id from nav args; for now using name as placeholder is not sufficient.
+                                                    // This block will be completed when edit wiring is defined with IDs.
+                                                    val payload = "{}"
+                                                    conn.outputStream.use { os -> java.io.OutputStreamWriter(os).use { it.write(payload) } }
+                                                    val code = conn.responseCode
+                                                    val resp = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+                                                    withContext(Dispatchers.Main) {
+                                                        if (code in 200..299) {
+                                                            snackbarHostState.showSnackbar("Routine updated")
+                                                            RoutinesRepository.refresh(baseUrl, petId)
+                                                            onConfirm(careName)
+                                                        } else {
+                                                            snackbarHostState.showSnackbar("Error $code: $resp")
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                withContext(Dispatchers.Main) { snackbarHostState.showSnackbar("Network error: ${e.message}") }
+                                            } finally {
+                                                withContext(Dispatchers.Main) { isSubmitting = false }
+                                            }
+                                        }
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -157,9 +242,13 @@ fun RoutineCareFormScreen(
                                 contentColor = Color.White,
                                 disabledContainerColor = Color(0xFFDDD6FE)
                             ),
-                            enabled = formValid
+                            enabled = formValid && !isSubmitting
                         ) {
-                            Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                            if (isSubmitting) {
+                                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp), color = Color.White)
+                            } else {
+                                Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                            }
                         }
                     }
                 }
@@ -257,32 +346,34 @@ fun RoutineCareFormScreen(
                     Text(everyUnitError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }}
-            item { Text("Also add to", style = MaterialTheme.typography.titleSmall) }
-            item {
-                Column(Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = alsoBuddy,
-                            onCheckedChange = { alsoBuddy = it },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = purple,
-                                uncheckedColor = Color(0xFF9CA3AF),
-                                checkmarkColor = Color.White
+            if (!isEdit) {
+                item { Text("Also add to", style = MaterialTheme.typography.titleSmall) }
+                item {
+                    Column(Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = alsoBuddy,
+                                onCheckedChange = { alsoBuddy = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = purple,
+                                    uncheckedColor = Color(0xFF9CA3AF),
+                                    checkmarkColor = Color.White
+                                )
                             )
-                        )
-                        Text("Buddy")
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = alsoLuna,
-                            onCheckedChange = { alsoLuna = it },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = purple,
-                                uncheckedColor = Color(0xFF9CA3AF),
-                                checkmarkColor = Color.White
+                            Text("Buddy")
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = alsoLuna,
+                                onCheckedChange = { alsoLuna = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = purple,
+                                    uncheckedColor = Color(0xFF9CA3AF),
+                                    checkmarkColor = Color.White
+                                )
                             )
-                        )
-                        Text("Luna")
+                            Text("Luna")
+                        }
                     }
                 }
             }

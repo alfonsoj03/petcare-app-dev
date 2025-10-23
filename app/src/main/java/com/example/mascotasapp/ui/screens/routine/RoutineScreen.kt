@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -23,6 +25,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.example.mascotasapp.data.repository.RoutinesRepository
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 import com.example.mascotasapp.ui.screens.routine.RoutineViewModel
@@ -36,6 +45,21 @@ fun RoutineScreen(
     onMarkDone: (String) -> Unit = {},
     onEditItem: (String) -> Unit = {},
     onEditMedication: (String) -> Unit = {}
+
+private fun formatDateTimePretty(raw: String?): String {
+    val s = raw?.trim().orEmpty()
+    if (s.isBlank()) return "--"
+    val zone = ZoneId.systemDefault()
+    val fmt = DateTimeFormatter.ofPattern("MMM d, yyyy, h:mm a", Locale.getDefault())
+    // Try ISO Instant (e.g., 2025-10-13T06:00:00.000Z)
+    runCatching { Instant.parse(s).atZone(zone).format(fmt) }.onSuccess { return it }
+    // Try ISO local datetime with space or T (e.g., 2025-10-13 06:00)
+    val normalized = if (s.matches(Regex("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$"))) s.replace(' ', 'T') else s
+    runCatching { LocalDateTime.parse(normalized).atZone(zone).format(fmt) }.onSuccess { return it }
+    // Try date only -> show date like medication (no time available)
+    runCatching { LocalDate.parse(s).format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())) }.onSuccess { return it }
+    return s
+}
 ) {
     val routineViewModel: RoutineViewModel = viewModel()
     val uiState = routineViewModel.uiState
@@ -82,6 +106,8 @@ fun RoutineScreen(
         containerColor = bgSurface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
+        val routines by RoutinesRepository.routines.collectAsState()
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -94,55 +120,38 @@ fun RoutineScreen(
                     Text("Routines", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     AssistChip(
                         onClick = onAddCustom,
-                        label = { Text("+ Add ") },
+                        label = { Text("+ Add Custom") },
                         colors = AssistChipDefaults.assistChipColors(containerColor = brandPurple, labelColor = Color.White)
                     )
                 }
             }
-            item {
-                RoutineCard(
-                    title = "Feeding",
-                    statusText = "Due soon",
-                    statusBg = orangeSurface,
-                    statusFg = orange,
-                    lastDate = "Oct 12, 2025, 11pm",
-                    nextDate = "Oct 13, 2025, 11pm",
-                    onMarkDone = {
-                        routineViewModel.onMarkDone("feeding")
-                        onMarkDone("feeding")
-                    },
-                    onEdit = { onEditItem("feeding") }
-                )
-            }
-            item {
-                RoutineCard(
-                    title = "Dental Care",
-                    statusText = "Due soon",
-                    statusBg = orangeSurface,
-                    statusFg = orange,
-                    lastDate = "Oct 10, 2025",
-                    nextDate = "Oct 20, 2025",
-                    onMarkDone = {
-                        routineViewModel.onMarkDone("dental")
-                        onMarkDone("dental")
-                    },
-                    onEdit = { onEditItem("dental") }
-                )
-            }
-            item {
-                RoutineCard(
-                    title = "Bath",
-                    statusText = "Up to date",
-                    statusBg = greenSurface,
-                    statusFg = green,
-                    lastDate = "Oct 10, 2025",
-                    nextDate = "Dec 10, 2025",
-                    onMarkDone = {
-                        routineViewModel.onMarkDone("bath")
-                        onMarkDone("bath")
-                    },
-                    onEdit = { onEditItem("bath") }
-                )
+            if (routines.isEmpty()) {
+                item {
+                    Text("No routines yet.", style = MaterialTheme.typography.bodyMedium, color = muted)
+                }
+            } else {
+                items(routines, key = { it.assignment_id }) { r ->
+                    val statusFg = when {
+                        r.next_activity.isBlank() -> muted
+                        else -> green
+                    }
+                    val statusBg = when {
+                        r.next_activity.isBlank() -> Color(0xFFF3F4F6)
+                        else -> greenSurface
+                    }
+                    val lastPretty = formatDateTimePretty(r.last_performed_at)
+                    val nextPretty = formatDateTimePretty(r.next_activity)
+                    RoutineCard(
+                        title = r.routine_name.ifBlank { "Routine" },
+                        statusText = if (r.next_activity.isBlank()) "--" else "Scheduled",
+                        statusBg = statusBg,
+                        statusFg = statusFg,
+                        lastDate = lastPretty,
+                        nextDate = nextPretty,
+                        onMarkDone = { onMarkDone(r.routine_id) },
+                        onEdit = { onEditItem(r.routine_id) }
+                    )
+                }
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
