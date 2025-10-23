@@ -26,6 +26,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.example.mascotasapp.data.repository.RoutinesRepository
+import com.example.mascotasapp.core.SelectedPetStore
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -91,7 +93,13 @@ fun RoutineScreen(
         containerColor = bgSurface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
-        val routines by RoutinesRepository.routines.collectAsState()
+        val selectedPetId by SelectedPetStore.selectedPetId.collectAsState(initial = null)
+        val routinesFlow = if (selectedPetId.isNullOrBlank()) {
+            MutableStateFlow(emptyList<RoutinesRepository.RoutineItem>())
+        } else {
+            RoutinesRepository.routinesFlow(selectedPetId!!)
+        }
+        val routines by routinesFlow.collectAsState(initial = emptyList())
 
         LazyColumn(
             modifier = Modifier

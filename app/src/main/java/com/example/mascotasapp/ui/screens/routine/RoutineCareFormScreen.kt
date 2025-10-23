@@ -170,143 +170,7 @@ fun RoutineCareFormScreen(
                                 dateTimeError = validateDateTime(dateTime)
                                 everyValueError = validateEveryValue(everyValue)
                                 everyUnitError = validateEveryUnit(everyUnit)
-<<<<<<< HEAD
-                                val valid = listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }
-                                if (valid) {
-                                    val petId = SelectedPetStore.get()
-                                    if (petId.isNullOrBlank()) {
-                                        scope.launch(Dispatchers.Main) {
-                                            snackbarHostState.showSnackbar(
-                                                "Select a pet first"
-                                            )
-                                        }
-                                    } else {
-                                        isSubmitting = true
-                                        scope.launch {
-                                            try {
-                                                if (!isEdit) {
-                                                    val url = URL(baseUrl + "/createRoutine")
-                                                    val conn =
-                                                        (url.openConnection() as HttpURLConnection).apply {
-                                                            requestMethod = "POST"
-                                                            doOutput = true
-                                                            setRequestProperty(
-                                                                "Content-Type",
-                                                                "application/json"
-                                                            )
-                                                            setRequestProperty(
-                                                                "X-Debug-Uid",
-                                                                "dev-user"
-                                                            )
-                                                        }
-                                                    val alsoIds = ui.alsoAddToPetIds.toList()
-                                                    val assignJson = buildString {
-                                                        append("[")
-                                                        append(JsonUtils.q(petId))
-                                                        for (extra in alsoIds) {
-                                                            append(",")
-                                                            append(JsonUtils.q(extra))
-                                                        }
-                                                        append("]")
-                                                    }
-                                                    val payload = """
-                                                        {
-                                                          "routine_name": ${JsonUtils.q(careName.trim())},
-                                                          "start_of_activity": ${
-                                                        JsonUtils.q(
-                                                            dateTime.trim()
-                                                        )
-                                                    },
-                                                          "perform_every_number": ${
-                                                        JsonUtils.q(
-                                                            everyValue.trim()
-                                                        )
-                                                    },
-                                                          "perform_every_unit": ${
-                                                        JsonUtils.q(
-                                                            everyUnit.trim()
-                                                        )
-                                                    },
-                                                          "assign_to_pets": $assignJson
-                                                        }
-                                                    """.trimIndent()
-                                                    conn.outputStream.use { os ->
-                                                        java.io.OutputStreamWriter(
-                                                            os
-                                                        ).use { it.write(payload) }
-                                                    }
-                                                    val code = conn.responseCode
-                                                    val resp =
-                                                        (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()
-                                                            ?.use { it.readText() } ?: ""
-                                                    withContext(Dispatchers.Main) {
-                                                        if (code in 200..299) {
-                                                            snackbarHostState.showSnackbar("Routine created")
-                                                            RoutinesRepository.refresh(
-                                                                baseUrl,
-                                                                petId
-                                                            )
-                                                            onConfirm(careName)
-                                                        } else {
-                                                            snackbarHostState.showSnackbar("Error $code: $resp")
-                                                        }
-                                                    }
-                                                } else {
-                                                    // Edit -> PUT /routines
-                                                    val url = URL(baseUrl + "/routines")
-                                                    val conn =
-                                                        (url.openConnection() as HttpURLConnection).apply {
-                                                            requestMethod = "PUT"
-                                                            doOutput = true
-                                                            setRequestProperty(
-                                                                "Content-Type",
-                                                                "application/json"
-                                                            )
-                                                            setRequestProperty(
-                                                                "X-Debug-Uid",
-                                                                "dev-user"
-                                                            )
-                                                        }
-                                                    // In a follow-up we can pass routine_id from nav args; for now using name as placeholder is not sufficient.
-                                                    // This block will be completed when edit wiring is defined with IDs.
-                                                    val payload = "{}"
-                                                    conn.outputStream.use { os ->
-                                                        java.io.OutputStreamWriter(
-                                                            os
-                                                        ).use { it.write(payload) }
-                                                    }
-                                                    val code = conn.responseCode
-                                                    val resp =
-                                                        (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()
-                                                            ?.use { it.readText() } ?: ""
-                                                    withContext(Dispatchers.Main) {
-                                                        if (code in 200..299) {
-                                                            snackbarHostState.showSnackbar("Routine updated")
-                                                            RoutinesRepository.refresh(
-                                                                baseUrl,
-                                                                petId
-                                                            )
-                                                            onConfirm(careName)
-                                                        } else {
-                                                            snackbarHostState.showSnackbar("Error $code: $resp")
-                                                        }
-                                                    }
-                                                }
-                                            } catch (e: Exception) {
-                                                withContext(Dispatchers.Main) {
-                                                    snackbarHostState.showSnackbar(
-                                                        "Network error: ${e.message}"
-                                                    )
-                                                }
-                                            } finally {
-                                                withContext(Dispatchers.Main) {
-                                                    isSubmitting = false
-                                                }
-                                            }
-                                        }
-                                    }
-                                // Navigation is handled after network success; avoid duplicate callbacks here
-=======
+
                                 if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
                                     vm.submitCreateRoutine(
                                         context = context,
@@ -322,7 +186,6 @@ fun RoutineCareFormScreen(
                                         }
                                     }
                                 }
->>>>>>> 6e328f4 (feat:medicationsrepository; fix: health, routineform,routinerepository, routineformview, app)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -333,18 +196,20 @@ fun RoutineCareFormScreen(
                                 contentColor = Color.White,
                                 disabledContainerColor = Color(0xFFDDD6FE)
                             ),
-<<<<<<< HEAD
-                            enabled = formValid && !isSubmitting
-                        ) {
-                            if (isSubmitting) {
-=======
                             enabled = formValid && !ui.submitting
                         ) {
                             if (ui.submitting) {
->>>>>>> 6e328f4 (feat:medicationsrepository; fix: health, routineform,routinerepository, routineformview, app)
-                                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp), color = Color.White)
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White
+                                )
                             } else {
-                                Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                                Text(
+                                    confirmButtonText,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Medium
+                                )
                             }
                         }
                     }
