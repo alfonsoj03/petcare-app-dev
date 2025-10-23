@@ -155,6 +155,41 @@ fun DashboardScreen(
             .padding(padding)
             .padding(horizontal = 16.dp, vertical = 12.dp)
 
+        // For now, demo flags for whether there is health or routine activity
+        // In a real integration, compute these from backend responses
+        val hasHealthActivity by remember { mutableStateOf(false) }
+        val hasRoutineActivity by remember { mutableStateOf(false) }
+
+        val primary = MaterialTheme.colorScheme.primary
+        val recent = run {
+            val items = mutableListOf<Activity>()
+            if (hasHealthActivity) {
+                items.add(
+                    Activity(
+                        title = "Vaccine Recorded",
+                        subtitle = "Rabies booster updated",
+                        time = "2 hours ago",
+                        icon = Icons.Default.Vaccines,
+                        bg = primary.copy(alpha = 0.12f),
+                        tint = primary
+                    )
+                )
+            }
+            if (hasRoutineActivity) {
+                items.add(
+                    Activity(
+                        title = "Bath Recorded",
+                        subtitle = "Weekly grooming session",
+                        time = "Yesterday",
+                        icon = Icons.Default.Opacity,
+                        bg = Color(0xFFCFFAFE),
+                        tint = Color(0xFF0891B2)
+                    )
+                )
+            }
+            items
+        }
+
         when (hasPets) {
             null -> { // loading: show nothing special to keep it light
                 Box(modifier = contentModifier)
@@ -167,9 +202,9 @@ fun DashboardScreen(
                     modifier = contentModifier,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    item { PetCard(onOpenHealth = onOpenHealth, onOpenRoutine = onOpenRoutine) }
+                    item { PetCard(onOpenHealth = onOpenHealth, onOpenRoutine = onOpenRoutine, hasHealthActivity = hasHealthActivity, hasRoutineActivity = hasRoutineActivity) }
                     item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
-                    item { RecentActivitySection() }
+                    item { RecentActivitySection(recent) }
                 }
             }
         }
@@ -184,11 +219,11 @@ private fun EmptyWelcome(onCreatePet: () -> Unit, modifier: Modifier = Modifier)
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Surface(color = Color(0xFFE5F4EE), shape = CircleShape) {
+        Surface(color = Color(0xFF00B784), shape = CircleShape) {
             Icon(
                 imageVector = Icons.Filled.Pets,
                 contentDescription = null,
-                tint = Color(0xFF10B981),
+                tint = Color(0xFFF9FAFB),
                 modifier = Modifier
                     .size(80.dp)
                     .padding(16.dp)
@@ -227,8 +262,17 @@ private fun EmptyWelcome(onCreatePet: () -> Unit, modifier: Modifier = Modifier)
     }
 }
 
+data class Activity(
+    val title: String,
+    val subtitle: String,
+    val time: String,
+    val icon: ImageVector,
+    val bg: Color,
+    val tint: Color
+)
+
 @Composable
-private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit) {
+private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit, hasHealthActivity: Boolean, hasRoutineActivity: Boolean) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primary)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -248,20 +292,40 @@ private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit) {
                 Icon(imageVector = Icons.Default.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
             }
 
-            InfoRowCard(
-                title = "Next Vaccine",
-                subtitle = "Rabies vaccination due in 5 days",
-                icon = Icons.Default.Vaccines,
-                onClick = onOpenHealth
-            )
-
-            InfoRowCard(
-                title = "Next vet visit",
-                subtitle = "2025-10-15",
-                icon = Icons.Default.Event,
-                onClick = onOpenHealth,
-                modifier = Modifier.padding(bottom = 5.dp)
-            )
+            if (!hasHealthActivity && !hasRoutineActivity) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF33C59D)), shape = MaterialTheme.shapes.medium) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(color = Color.White.copy(alpha = 0.2f), shape = CircleShape) {
+                            Icon(Icons.Default.Event, contentDescription = null, tint = Color.White, modifier = Modifier.padding(8.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text("No recent activity.", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                    }
+                }
+            } else {
+                if (hasHealthActivity) {
+                    InfoRowCard(
+                        title = "Next Vaccine",
+                        subtitle = "Rabies vaccination due in 5 days",
+                        icon = Icons.Default.Vaccines,
+                        onClick = onOpenHealth
+                    )
+                }
+                if (hasRoutineActivity) {
+                    InfoRowCard(
+                        title = "Next vet visit",
+                        subtitle = "2025-10-15",
+                        icon = Icons.Default.Event,
+                        onClick = onOpenHealth,
+                        modifier = Modifier.padding(bottom = 5.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -417,45 +481,14 @@ private fun QuickActionCard(
 }
 
 @Composable
-private fun RecentActivitySection() {
-    data class Activity(
-        val title: String,
-        val subtitle: String,
-        val time: String,
-        val icon: ImageVector,
-        val bg: Color,
-        val tint: Color
-    )
-    val recent = listOf(
-        Activity(
-            title = "Bath Recorded",
-            subtitle = "Weekly grooming session",
-            time = "Yesterday",
-            icon = Icons.Default.Opacity,
-            bg = Color(0xFFCFFAFE),
-            tint = Color(0xFF0891B2)
-        ),
-        Activity(
-            title = "Vaccine Recorded",
-            subtitle = "Rabies booster updated",
-            time = "2 hours ago",
-            icon = Icons.Default.Vaccines,
-            bg = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-            tint = MaterialTheme.colorScheme.primary
-        ),
-        Activity(
-            title = "Feeding Recorded",
-            subtitle = "Chicken kibble • 2 cups",
-            time = "Today, 8:00 AM",
-            icon = Icons.Default.Restaurant,
-            bg = Color(0xFFFFEDD5),
-            tint = Color(0xFFEA580C)
-        )
-    )
+private fun RecentActivitySection(recent: List<Activity>) {
     Text(text = "Recent Activity", style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(8.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        recent.forEach { item ->
+    if (recent.isEmpty()) {
+        Text("No recent activity.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            recent.forEach { item ->
             ActivityItem(
                 title = item.title,
                 subtitle = item.subtitle,
@@ -464,6 +497,7 @@ private fun RecentActivitySection() {
                 bg = item.bg,
                 tint = item.tint
             )
+            }
         }
     }
 }
