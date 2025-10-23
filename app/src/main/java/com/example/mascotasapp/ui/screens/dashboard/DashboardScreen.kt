@@ -508,7 +508,19 @@ private fun RecentActivitySection(recent: List<Activity>) {
     Text(text = "Recent Activity", style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(8.dp))
     if (recent.isEmpty()) {
-        Text("No recent activity.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "No recent activity.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary,
+                textAlign = TextAlign.Center
+            )
+        }
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             recent.forEach { item ->
