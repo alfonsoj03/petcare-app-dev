@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,10 +42,16 @@ fun RoutineCareFormScreen(
     initialAlsoBuddy: Boolean = true,
     initialAlsoLuna: Boolean = false,
     onConfirm: (name: String) -> Unit,
+    onConfirmWithAlsoAdd: (name: String, alsoAddPetIds: Set<String>) -> Unit = { _, _ -> },
     onBack: () -> Unit
 ) {
     val bgSurface = Color(0xFFF9FAFB)
     val purple = Color(0xFF8B5CF6)
+
+    val context = LocalContext.current
+    val vm: RoutineCareFormViewModel = viewModel()
+    val ui = vm.uiState
+    LaunchedEffect(Unit) { vm.loadOtherPets(context) }
 
     var careName by remember { mutableStateOf(initialName) }
     var dateTime by remember { mutableStateOf(initialDateTime) }
@@ -231,6 +239,9 @@ fun RoutineCareFormScreen(
                                             }
                                         }
                                     }
+                                if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
+                                    onConfirm(careName)
+                                    onConfirmWithAlsoAdd(careName, ui.alsoAddToPetIds)
                                 }
                             },
                             modifier = Modifier
@@ -373,6 +384,39 @@ fun RoutineCareFormScreen(
                                 )
                             )
                             Text("Luna")
+            item { Text("Also add to", style = MaterialTheme.typography.titleSmall) }
+            item {
+                Column(Modifier.fillMaxWidth()) {
+                    when {
+                        ui.loading -> {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = purple)
+                            }
+                        }
+                        ui.error != null -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(ui.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                                OutlinedButton(onClick = { vm.retry(context) }) { Text("Reintentar") }
+                            }
+                        }
+                        ui.otherPets.isEmpty() -> {
+                            Text("No other pets available", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
+                        }
+                        else -> {
+                            ui.otherPets.forEach { pet ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = ui.alsoAddToPetIds.contains(pet.pet_id),
+                                        onCheckedChange = { vm.togglePet(pet.pet_id) },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = purple,
+                                            uncheckedColor = Color(0xFF9CA3AF),
+                                            checkmarkColor = Color.White
+                                        )
+                                    )
+                                    Text(pet.name)
+                                }
+                            }
                         }
                     }
                 }
