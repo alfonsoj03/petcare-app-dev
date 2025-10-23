@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+import com.example.mascotasapp.ui.screens.routine.RoutineViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +37,8 @@ fun RoutineScreen(
     onEditItem: (String) -> Unit = {},
     onEditMedication: (String) -> Unit = {}
 ) {
+    val routineViewModel: RoutineViewModel = viewModel()
+    val uiState = routineViewModel.uiState
     // Palette
     val bgSurface = Color(0xFFF9FAFB)
     val muted = Color(0xFF6B7280)
@@ -89,7 +94,7 @@ fun RoutineScreen(
                     Text("Routines", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     AssistChip(
                         onClick = onAddCustom,
-                        label = { Text("+ Add Custom") },
+                        label = { Text("+ Add ") },
                         colors = AssistChipDefaults.assistChipColors(containerColor = brandPurple, labelColor = Color.White)
                     )
                 }
@@ -102,7 +107,10 @@ fun RoutineScreen(
                     statusFg = orange,
                     lastDate = "Oct 12, 2025, 11pm",
                     nextDate = "Oct 13, 2025, 11pm",
-                    onMarkDone = { onMarkDone("feeding") },
+                    onMarkDone = {
+                        routineViewModel.onMarkDone("feeding")
+                        onMarkDone("feeding")
+                    },
                     onEdit = { onEditItem("feeding") }
                 )
             }
@@ -114,7 +122,10 @@ fun RoutineScreen(
                     statusFg = orange,
                     lastDate = "Oct 10, 2025",
                     nextDate = "Oct 20, 2025",
-                    onMarkDone = { onMarkDone("dental") },
+                    onMarkDone = {
+                        routineViewModel.onMarkDone("dental")
+                        onMarkDone("dental")
+                    },
                     onEdit = { onEditItem("dental") }
                 )
             }
@@ -126,7 +137,10 @@ fun RoutineScreen(
                     statusFg = green,
                     lastDate = "Oct 10, 2025",
                     nextDate = "Dec 10, 2025",
-                    onMarkDone = { onMarkDone("bath") },
+                    onMarkDone = {
+                        routineViewModel.onMarkDone("bath")
+                        onMarkDone("bath")
+                    },
                     onEdit = { onEditItem("bath") }
                 )
             }
@@ -148,7 +162,10 @@ fun RoutineScreen(
                     start = "Oct 1, 2024",
                     end = "Oct 1, 2025",
                     nextDose = "Dec 1, 2024",
-                    onMarkDone = { onMarkDone("heartgard_plus") },
+                    onMarkDone = {
+                        routineViewModel.onMarkDone("heartgard_plus")
+                        onMarkDone("heartgard_plus")
+                    },
                     onEdit = { onEditMedication("heartgard_plus") }
                 )
             }
@@ -160,11 +177,32 @@ fun RoutineScreen(
                     start = "Nov 15, 2024",
                     end = "Dec 15, 2024",
                     nextDose = "Today, 6:00 PM",
-                    onMarkDone = { onMarkDone("apoquel") },
+                    onMarkDone = {
+                        routineViewModel.onMarkDone("apoquel")
+                        onMarkDone("apoquel")
+                    },
                     onEdit = { onEditMedication("apoquel") }
                 )
             }
             item { Spacer(Modifier.height(8.dp)) }
+        }
+
+        if (uiState.overdueDialog != null) {
+            AlertDialog(
+                onDismissRequest = { routineViewModel.dismissOverdueDialog() },
+                title = { Text("Te pasaste de la hora") },
+                text = { Text("¿Cómo calculamos la próxima ejecución?") },
+                confirmButton = {
+                    TextButton(onClick = { routineViewModel.chooseOverdueRescheduleFromNow() }) {
+                        Text("Desde ahora")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { routineViewModel.chooseOverdueRescheduleFromOriginal() }) {
+                        Text("Desde la hora original")
+                    }
+                }
+            )
         }
     }
 }

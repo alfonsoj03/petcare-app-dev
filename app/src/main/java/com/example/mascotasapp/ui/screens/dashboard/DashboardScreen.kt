@@ -11,6 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +54,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import org.json.JSONArray
 
 @Composable
@@ -83,6 +88,25 @@ fun DashboardScreen(
         }
         snackbarHostState.showSnackbar("Selected pet: ${id ?: "none"}")
     }
+    // Determine if user has pets by calling the same emulator Cloud Function used in PetsScreen
+    var hasPets by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1"
+                val url = URL("$baseUrl/getPets")
+                val conn = (url.openConnection() as HttpURLConnection).apply { requestMethod = "GET"; connectTimeout = 8000; readTimeout = 8000 }
+                val code = conn.responseCode
+                val count = if (code in 200..299) {
+                    val body = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                    JSONArray(body).length()
+                } else 0
+                conn.disconnect()
+                withContext(Dispatchers.Main) { hasPets = count > 0 }
+            }
+        }.onFailure { hasPets = false }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -149,22 +173,129 @@ fun DashboardScreen(
         containerColor = Color(0xFFF9FAFB),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item { PetCard(onOpenHealth = onOpenHealth, onOpenRoutine = onOpenRoutine) }
-            item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
-            item { RecentActivitySection() }
+        val contentModifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+
+        // For now, demo flags for whether there is health or routine activity
+        // In a real integration, compute these from backend responses
+        val hasHealthActivity by remember { mutableStateOf(false) }
+        val hasRoutineActivity by remember { mutableStateOf(false) }
+
+        val primary = MaterialTheme.colorScheme.primary
+        val recent = run {
+            val items = mutableListOf<Activity>()
+            if (hasHealthActivity) {
+                items.add(
+                    Activity(
+                        title = "Vaccine Recorded",
+                        subtitle = "Rabies booster updated",
+                        time = "2 hours ago",
+                        icon = Icons.Default.Vaccines,
+                        bg = primary.copy(alpha = 0.12f),
+                        tint = primary
+                    )
+                )
+            }
+            if (hasRoutineActivity) {
+                items.add(
+                    Activity(
+                        title = "Bath Recorded",
+                        subtitle = "Weekly grooming session",
+                        time = "Yesterday",
+                        icon = Icons.Default.Opacity,
+                        bg = Color(0xFFCFFAFE),
+                        tint = Color(0xFF0891B2)
+                    )
+                )
+            }
+            items
+        }
+
+        when (hasPets) {
+            null -> { // loading: show nothing special to keep it light
+                Box(modifier = contentModifier)
+            }
+            false -> {
+                EmptyWelcome(onCreatePet = onAddPet, modifier = contentModifier)
+            }
+            else -> {
+                LazyColumn(
+                    modifier = contentModifier,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item { PetCard(onOpenHealth = onOpenHealth, onOpenRoutine = onOpenRoutine, hasHealthActivity = hasHealthActivity, hasRoutineActivity = hasRoutineActivity) }
+                    item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
+                    item { RecentActivitySection(recent) }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit) {
+private fun EmptyWelcome(onCreatePet: () -> Unit, modifier: Modifier = Modifier) {
+    val brandPurple = Color(0xFF8B5CF6)
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(color = Color(0xFF00B784), shape = CircleShape) {
+            Icon(
+                imageVector = Icons.Filled.Pets,
+                contentDescription = null,
+                tint = Color(0xFFF9FAFB),
+                modifier = Modifier
+                    .size(80.dp)
+                    .padding(16.dp)
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            text = "Welcome to\nPetCare!",
+            style = MaterialTheme.typography.headlineSmall,
+            color = Color(0xFF111827),
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Keep your pets happy and healthy with personalized care routines",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF6B7280),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onCreatePet,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = brandPurple,
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFFDDD6FE)
+            )
+        ) {
+            Text("Create New Pet")
+        }
+    }
+}
+
+data class Activity(
+    val title: String,
+    val subtitle: String,
+    val time: String,
+    val icon: ImageVector,
+    val bg: Color,
+    val tint: Color
+)
+
+@Composable
+private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit, hasHealthActivity: Boolean, hasRoutineActivity: Boolean) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primary)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -184,20 +315,40 @@ private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit) {
                 Icon(imageVector = Icons.Default.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
             }
 
-            InfoRowCard(
-                title = "Next Vaccine",
-                subtitle = "Rabies vaccination due in 5 days",
-                icon = Icons.Default.Vaccines,
-                onClick = onOpenHealth
-            )
-
-            InfoRowCard(
-                title = "Next vet visit",
-                subtitle = "2025-10-15",
-                icon = Icons.Default.Event,
-                onClick = onOpenHealth,
-                modifier = Modifier.padding(bottom = 5.dp)
-            )
+            if (!hasHealthActivity && !hasRoutineActivity) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF33C59D)), shape = MaterialTheme.shapes.medium) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(color = Color.White.copy(alpha = 0.2f), shape = CircleShape) {
+                            Icon(Icons.Default.Event, contentDescription = null, tint = Color.White, modifier = Modifier.padding(8.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text("No recent activity.", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                    }
+                }
+            } else {
+                if (hasHealthActivity) {
+                    InfoRowCard(
+                        title = "Next Vaccine",
+                        subtitle = "Rabies vaccination due in 5 days",
+                        icon = Icons.Default.Vaccines,
+                        onClick = onOpenHealth
+                    )
+                }
+                if (hasRoutineActivity) {
+                    InfoRowCard(
+                        title = "Next vet visit",
+                        subtitle = "2025-10-15",
+                        icon = Icons.Default.Event,
+                        onClick = onOpenHealth,
+                        modifier = Modifier.padding(bottom = 5.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -353,45 +504,14 @@ private fun QuickActionCard(
 }
 
 @Composable
-private fun RecentActivitySection() {
-    data class Activity(
-        val title: String,
-        val subtitle: String,
-        val time: String,
-        val icon: ImageVector,
-        val bg: Color,
-        val tint: Color
-    )
-    val recent = listOf(
-        Activity(
-            title = "Bath Recorded",
-            subtitle = "Weekly grooming session",
-            time = "Yesterday",
-            icon = Icons.Default.Opacity,
-            bg = Color(0xFFCFFAFE),
-            tint = Color(0xFF0891B2)
-        ),
-        Activity(
-            title = "Vaccine Recorded",
-            subtitle = "Rabies booster updated",
-            time = "2 hours ago",
-            icon = Icons.Default.Vaccines,
-            bg = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-            tint = MaterialTheme.colorScheme.primary
-        ),
-        Activity(
-            title = "Feeding Recorded",
-            subtitle = "Chicken kibble • 2 cups",
-            time = "Today, 8:00 AM",
-            icon = Icons.Default.Restaurant,
-            bg = Color(0xFFFFEDD5),
-            tint = Color(0xFFEA580C)
-        )
-    )
+private fun RecentActivitySection(recent: List<Activity>) {
     Text(text = "Recent Activity", style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(8.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        recent.forEach { item ->
+    if (recent.isEmpty()) {
+        Text("No recent activity.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            recent.forEach { item ->
             ActivityItem(
                 title = item.title,
                 subtitle = item.subtitle,
@@ -400,6 +520,7 @@ private fun RecentActivitySection() {
                 bg = item.bg,
                 tint = item.tint
             )
+            }
         }
     }
 }
