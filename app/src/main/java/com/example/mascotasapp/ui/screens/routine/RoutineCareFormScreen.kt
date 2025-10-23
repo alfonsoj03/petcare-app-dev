@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,10 +32,16 @@ fun RoutineCareFormScreen(
     initialAlsoBuddy: Boolean = true,
     initialAlsoLuna: Boolean = false,
     onConfirm: (name: String) -> Unit,
+    onConfirmWithAlsoAdd: (name: String, alsoAddPetIds: Set<String>) -> Unit = { _, _ -> },
     onBack: () -> Unit
 ) {
     val bgSurface = Color(0xFFF9FAFB)
     val purple = Color(0xFF8B5CF6)
+
+    val context = LocalContext.current
+    val vm: RoutineCareFormViewModel = viewModel()
+    val ui = vm.uiState
+    LaunchedEffect(Unit) { vm.loadOtherPets(context) }
 
     var careName by remember { mutableStateOf(initialName) }
     var dateTime by remember { mutableStateOf(initialDateTime) }
@@ -146,6 +154,7 @@ fun RoutineCareFormScreen(
                                 everyUnitError = validateEveryUnit(everyUnit)
                                 if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
                                     onConfirm(careName)
+                                    onConfirmWithAlsoAdd(careName, ui.alsoAddToPetIds)
                                 }
                             },
                             modifier = Modifier
@@ -260,29 +269,37 @@ fun RoutineCareFormScreen(
             item { Text("Also add to", style = MaterialTheme.typography.titleSmall) }
             item {
                 Column(Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = alsoBuddy,
-                            onCheckedChange = { alsoBuddy = it },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = purple,
-                                uncheckedColor = Color(0xFF9CA3AF),
-                                checkmarkColor = Color.White
-                            )
-                        )
-                        Text("Buddy")
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = alsoLuna,
-                            onCheckedChange = { alsoLuna = it },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = purple,
-                                uncheckedColor = Color(0xFF9CA3AF),
-                                checkmarkColor = Color.White
-                            )
-                        )
-                        Text("Luna")
+                    when {
+                        ui.loading -> {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = purple)
+                            }
+                        }
+                        ui.error != null -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(ui.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                                OutlinedButton(onClick = { vm.retry(context) }) { Text("Reintentar") }
+                            }
+                        }
+                        ui.otherPets.isEmpty() -> {
+                            Text("No other pets available", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
+                        }
+                        else -> {
+                            ui.otherPets.forEach { pet ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = ui.alsoAddToPetIds.contains(pet.pet_id),
+                                        onCheckedChange = { vm.togglePet(pet.pet_id) },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = purple,
+                                            uncheckedColor = Color(0xFF9CA3AF),
+                                            checkmarkColor = Color.White
+                                        )
+                                    )
+                                    Text(pet.name)
+                                }
+                            }
+                        }
                     }
                 }
             }
