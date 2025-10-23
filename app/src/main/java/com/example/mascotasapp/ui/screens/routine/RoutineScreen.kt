@@ -94,7 +94,7 @@ fun RoutineScreen(
                     Text("Routines", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     AssistChip(
                         onClick = onAddCustom,
-                        label = { Text("+ Add Custom") },
+                        label = { Text("+ Add ") },
                         colors = AssistChipDefaults.assistChipColors(containerColor = brandPurple, labelColor = Color.White)
                     )
                 }
