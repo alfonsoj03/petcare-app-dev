@@ -52,7 +52,7 @@ fun HealthScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Health & Vaccination",
+                        "Health",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = Color(0xFF111827)
                     )

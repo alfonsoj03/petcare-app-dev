@@ -10,6 +10,7 @@ import com.example.mascotasapp.core.ApiConfig
 import com.example.mascotasapp.core.SelectedPetStore
 import com.example.mascotasapp.data.model.Pet
 import com.example.mascotasapp.data.repository.PetsRepository
+import com.example.mascotasapp.data.repository.RoutinesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -20,7 +21,10 @@ class RoutineCareFormViewModel : ViewModel() {
         val error: String? = null,
         val selectedPetId: String? = null,
         val otherPets: List<Pet> = emptyList(),
-        val alsoAddToPetIds: Set<String> = emptySet()
+        val alsoAddToPetIds: Set<String> = emptySet(),
+        val submitting: Boolean = false,
+        val submitError: String? = null,
+        val submitSuccess: Boolean = false
     )
 
     var uiState by mutableStateOf(UiState())
@@ -67,5 +71,30 @@ class RoutineCareFormViewModel : ViewModel() {
 
     fun clearSelection() {
         uiState = uiState.copy(alsoAddToPetIds = emptySet())
+    }
+
+    fun submitCreateRoutine(context: Context, name: String, startDateTime: String, everyNumber: String, everyUnit: String, onDone: (Boolean) -> Unit) {
+        if (uiState.submitting) return
+        viewModelScope.launch {
+            uiState = uiState.copy(submitting = true, submitError = null, submitSuccess = false)
+            try {
+                SelectedPetStore.init(context)
+                RoutinesRepository.init(context)
+                val selectedId = SelectedPetStore.get() ?: throw IllegalStateException("No selected pet")
+                withContext(Dispatchers.IO) {
+                    RoutinesRepository.createRoutine(ApiConfig.BASE_URL, selectedId, name, startDateTime, everyNumber, everyUnit)
+                    if (uiState.alsoAddToPetIds.isNotEmpty()) {
+                        uiState.alsoAddToPetIds.forEach { otherId ->
+                            RoutinesRepository.createRoutine(ApiConfig.BASE_URL, otherId, name, startDateTime, everyNumber, everyUnit)
+                        }
+                    }
+                }
+                uiState = uiState.copy(submitting = false, submitSuccess = true)
+                onDone(true)
+            } catch (t: Throwable) {
+                uiState = uiState.copy(submitting = false, submitError = t.message ?: "Unknown error", submitSuccess = false)
+                onDone(false)
+            }
+        }
     }
 }
