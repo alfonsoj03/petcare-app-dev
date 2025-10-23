@@ -50,16 +50,32 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
+import com.example.mascotasapp.core.ApiConfig
+import com.example.mascotasapp.data.repository.PetsRepository
+import com.example.mascotasapp.data.model.Pet
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.example.mascotasapp.core.SelectedPetStore
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.coroutines.launch
 
 enum class EventType { VACCINE, VET, OVERDUE }
+
+private fun com.example.mascotasapp.data.model.Pet.toExtended(): PetExtended {
+    val dob = this.date_of_birth
+    val ageY = safeYearsFromDob(dob)
+    return PetExtended(
+        id = this.pet_id.ifBlank { this.name },
+        name = this.name,
+        breed = this.breed,
+        species = this.species,
+        ageYears = ageY,
+        upToDate = true,
+        nextEvent = "—",
+        eventType = EventType.VET
+    )
+}
 
 data class PetExtended(
     val id: String,
@@ -80,53 +96,29 @@ fun PetsScreen(
     selectedPetId: String? = null,
     onSelectedPet: (PetExtended) -> Unit = {}
 ) {
-    val pets = remember { mutableStateListOf<PetExtended>() }
-    var selectedId by remember { mutableStateOf(selectedPetId) }
 
-    // Load from emulator Cloud Function getPets (demo, no auth required)
+    val repoPets by PetsRepository.pets.collectAsState()
+    val pets = remember(repoPets) {
+        repoPets.map { it.toExtended() }
+    }
+
+    val ctx = LocalContext.current
+    LaunchedEffect(Unit) { SelectedPetStore.init(ctx) }
+    val storeSelectedId by SelectedPetStore.selectedPetId.collectAsState(initial = selectedPetId)
+    var selectedId by remember { mutableStateOf(storeSelectedId) }
+    LaunchedEffect(storeSelectedId) { selectedId = storeSelectedId }
+    var reloading by remember { mutableStateOf(false) }
+    val scope = remember { CoroutineScope(Dispatchers.IO) }
+
     LaunchedEffect(Unit) {
-        val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1"
-        runCatching {
-            withContext(Dispatchers.IO) {
-                val url = URL("$baseUrl/getPets")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = 8000
-                    readTimeout = 8000
-                }
-                val code = conn.responseCode
-                if (code in 200..299) {
-                    val body = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
-                    val arr = JSONArray(body)
-                    val list = mutableListOf<PetExtended>()
-                    for (i in 0 until arr.length()) {
-                        val o = arr.getJSONObject(i)
-                        val id = o.optString("pet_id")
-                        val name = o.optString("name", "Unnamed")
-                        val breed = o.optString("breed", "")
-                        val species = o.optString("species", "")
-                        val dob = o.optString("date_of_birth", "")
-                        val ageY = safeYearsFromDob(dob)
-                        list.add(
-                            PetExtended(
-                                id = id.ifBlank { name + i },
-                                name = name,
-                                breed = breed,
-                                species = species,
-                                ageYears = ageY,
-                                upToDate = true,
-                                nextEvent = "—",
-                                eventType = EventType.VET
-                            )
-                        )
-                    }
-                    withContext(Dispatchers.Main) {
-                        pets.clear(); pets.addAll(list)
-                        if (selectedId == null && pets.isNotEmpty()) selectedId = pets.first().id
-                    }
-                }
-                conn.disconnect()
-            }
+        // Ensure repo emits current cache, then refresh in background
+        scope.launch { runCatching { PetsRepository.refresh(ApiConfig.BASE_URL) } }
+    }
+
+    LaunchedEffect(pets) {
+        if (selectedId == null && pets.isNotEmpty()) {
+            val firstId = pets.first().id
+            SelectedPetStore.set(firstId)
         }
     }
 
@@ -141,6 +133,27 @@ fun PetsScreen(
                     )
                 },
                 actions = {
+                    // Reload action
+                    TextButton(onClick = {
+                        if (!reloading) {
+                            reloading = true
+                            scope.launch {
+                                runCatching { PetsRepository.refresh(ApiConfig.BASE_URL) }
+                                launch(Dispatchers.Main) { reloading = false }
+                            }
+                        }
+                    }) {
+                        if (reloading) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp),
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        } else {
+                            Text("Reload")
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
                     // Green circular paw icon as in wireframe
                     Box(
                         modifier = Modifier
@@ -177,7 +190,7 @@ fun PetsScreen(
                     pet = pet,
                     selected = pet.id == selectedId,
                     onSelect = {
-                        selectedId = pet.id
+                        SelectedPetStore.set(pet.id)
                         onSelectedPet(pet)
                     },
                     onEdit = { onOpenPet(pet.id) }

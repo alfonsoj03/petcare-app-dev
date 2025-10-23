@@ -8,6 +8,481 @@ async function getSheetsClient() {
   return google.sheets({version: "v4", auth});
 }
 
+async function getRoutinesByPetService({userId, petId}) {
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  // Load routines and assignments
+  const [routinesResp, raResp] = await Promise.all([
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "routines!A1:Z10000",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "routineassignments!A1:Z10000",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+  ]);
+
+  const rrows = routinesResp.data.values || [];
+  const arows = raResp.data.values || [];
+  if (rrows.length <= 1) return [];
+
+  const routineById = new Map();
+  // routines columns: A routine_id, B user_id, C routine_name, D start_of_activity, E perform_every_number, F perform_every_unit, G created_at
+  for (let i = 1; i < rrows.length; i++) {
+    const cols = rrows[i];
+    routineById.set(String(cols[0]), {
+      routine_id: String(cols[0] || ""),
+      user_id: String(cols[1] || ""),
+      routine_name: String(cols[2] || ""),
+      start_of_activity: String(cols[3] || ""),
+      perform_every_number: String(cols[4] || ""),
+      perform_every_unit: String(cols[5] || ""),
+      created_at: String(cols[6] || ""),
+    });
+  }
+
+  // routineassignments columns: A assignment_id, B routine_id, C pet_id, D user_id, E assigned_at, F last_performed_at, G next_activity
+  const out = [];
+  for (let i = 1; i < arows.length; i++) {
+    const cols = arows[i];
+    if (String(cols[2]) === String(petId) && String(cols[3]) === String(userId)) {
+      const routine = routineById.get(String(cols[1]));
+      if (routine && routine.user_id === String(userId)) {
+        out.push({
+          assignment_id: String(cols[0] || ""),
+          pet_id: String(cols[2] || ""),
+          user_id: String(cols[3] || ""),
+          last_performed_at: String(cols[5] || ""),
+          next_activity: String(cols[6] || ""),
+          ...routine,
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
+async function updateRoutineService({userId, body}) {
+  const routineId = required(body.routine_id || body.id, "routine_id");
+  const petId = required(body.pet_id, "pet_id");
+
+  // We update the pet-specific assignment's schedule (next_activity) based on a provided start and interval
+  const startInput = required(body.start_of_activity, "start_of_activity");
+  const startStr = String(startInput).trim();
+  const dtMatch = startStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
+  if (!dtMatch) {
+    const e = new Error("start_of_activity must be in YYYY-MM-DD HH:mm format"); e.status = 400; throw e;
+  }
+  const yyyy = parseInt(dtMatch[1], 10);
+  const mm = parseInt(dtMatch[2], 10);
+  const dd = parseInt(dtMatch[3], 10);
+  const HH = parseInt(dtMatch[4], 10);
+  const MM = parseInt(dtMatch[5], 10);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || HH < 0 || HH > 23 || MM < 0 || MM > 59) {
+    const e = new Error("Invalid date/time values"); e.status = 400; throw e;
+  }
+  const startISO = new Date(Date.UTC(yyyy, mm - 1, dd, HH, MM, 0, 0)).toISOString();
+
+  const everyNumRaw = required(body.perform_every_number, "perform_every_number");
+  const n = Number(everyNumRaw);
+  if (!Number.isInteger(n) || n <= 0) { const e = new Error("perform_every_number must be a positive integer"); e.status = 400; throw e; }
+  const everyUnitRaw = required(body.perform_every_unit, "perform_every_unit");
+  const unit = String(everyUnitRaw || "").toLowerCase();
+  const allowedUnits = new Set(["hour", "hours", "day", "days", "week", "weeks", "month", "months"]);
+  if (!allowedUnits.has(unit)) { const e = new Error("perform_every_unit must be one of hours|days|weeks|months"); e.status = 400; throw e; }
+
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  // Find assignment row by routine_id + pet_id + user_id
+  const raResp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "routineassignments!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const arows = raResp.data.values || [];
+  if (arows.length <= 1) { const e = new Error("Assignment not found"); e.status = 404; throw e; }
+  let foundIndex = -1;
+  let assignmentId = "";
+  for (let i = 1; i < arows.length; i++) {
+    const cols = arows[i];
+    if (String(cols[1]) === String(routineId) && String(cols[2]) === String(petId) && String(cols[3]) === String(userId)) {
+      foundIndex = i; assignmentId = String(cols[0] || ""); break;
+    }
+  }
+  if (foundIndex === -1) { const e = new Error("Assignment not found"); e.status = 404; throw e; }
+
+  const nextActivity = addIntervalISO(startISO, n, unit);
+  const rowNumber = foundIndex + 1;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `routineassignments!G${rowNumber}:G${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {values: [[nextActivity]]},
+  });
+
+  // Activity log
+  const activityId = admin.firestore().collection("_ids").doc().id;
+  const now = isoNow();
+  const details = JSON.stringify({start_of_activity: startISO, perform_every_number: n, perform_every_unit: unit, next_activity: nextActivity});
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "activitylog!A1",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {values: [[
+      activityId,
+      userId,
+      "UPDATE_ROUTINE_ASSIGNMENT",
+      "routineassignments",
+      assignmentId,
+      now,
+      details,
+    ]]},
+  });
+
+  return {assignment_id: assignmentId, next_activity: nextActivity, updated_at: now};
+}
+async function updatePetService({userId, body}) {
+  const speciesOptions = ["Dog", "Cat", "Rabbit", "Bird", "Other"];
+  const sexOptions = ["Male", "Female", "Unknown"];
+
+  const petId = required(body.pet_id || body.id, "pet_id");
+  const name = required(body.name, "name");
+  const species = required(body.species, "species");
+  const sex = required(body.sex, "sex");
+  const breed = body.breed ? String(body.breed) : "";
+  const dob = body.dob ? String(body.dob) : "";
+  const weight = body.weight ? String(body.weight) : "";
+  const color = body.color ? String(body.color) : "";
+
+  const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ'., ]+$/;
+  if (name.trim().length < 2 || name.trim().length > 50 || !nameRegex.test(name.trim())) {
+    const e = new Error("Invalid name"); e.status = 400; throw e;
+  }
+  if (!speciesOptions.includes(species)) { const e = new Error("Invalid species"); e.status = 400; throw e; }
+  if (!sexOptions.includes(sex)) { const e = new Error("Invalid sex"); e.status = 400; throw e; }
+  if (breed.trim().length < 2 || breed.trim().length > 50 || !nameRegex.test(breed.trim())) { const e = new Error("Invalid breed"); e.status = 400; throw e; }
+  const dobPattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dobPattern.test(dob.trim())) { const e = new Error("Invalid dob format"); e.status = 400; throw e; }
+  const d = new Date(dob.trim());
+  if (Number.isNaN(d.getTime())) { const e = new Error("Invalid dob date"); e.status = 400; throw e; }
+  const today = new Date();
+  const y = d.getUTCFullYear();
+  if (d > today) { const e = new Error("DOB cannot be in the future"); e.status = 400; throw e; }
+  if (y < 1900) { const e = new Error("DOB year must be >= 1900"); e.status = 400; throw e; }
+  const fortyYearsMs = 40 * 365.25 * 24 * 3600 * 1000;
+  if ((today - d) > fortyYearsMs) { const e = new Error("Unrealistic age"); e.status = 400; throw e; }
+
+  if (!/^\d+$/.test(weight.trim()) || Number.parseInt(weight.trim(), 10) <= 0) { const e = new Error("Invalid weight"); e.status = 400; throw e; }
+  const colorRegex = /^[A-Za-z ]+$/;
+  if (!colorRegex.test(color.trim()) || color.trim().length === 0 || color.trim().length > 30) { const e = new Error("Invalid color"); e.status = 400; throw e; }
+  const imageUrl = body.imageUrl ? String(body.imageUrl) : "";
+
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  // Locate row by pet_id and user_id
+  const r = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "pets!A1:K10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const rows = r.data.values || [];
+  if (rows.length <= 1) { const e = new Error("Pet not found"); e.status = 404; throw e; }
+  let foundIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    const cols = rows[i];
+    if (String(cols[0] || "") === String(petId) && (!cols[1] || String(cols[1]) === String(userId))) {
+      foundIndex = i; break;
+    }
+  }
+  if (foundIndex === -1) { const e = new Error("Pet not found"); e.status = 404; throw e; }
+
+  const rowNumber = foundIndex + 1; // account for header
+  // Update columns: C name, D imageUrl, E species, F sex, G breed, H dob, I weight, J color
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `pets!C${rowNumber}:J${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {values: [[name, imageUrl, species, sex, breed, dob, weight, color]]},
+  });
+
+  // Activity log
+  const activityId = admin.firestore().collection("_ids").doc().id;
+  const now = isoNow();
+  const details = JSON.stringify({name, species, sex, breed, dob, weight, color, imageUrl});
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "activitylog!A1",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {values: [[
+      activityId,
+      userId,
+      "UPDATE_PET",
+      "pets",
+      petId,
+      now,
+      details,
+    ]]},
+  });
+
+  return {
+    pet_id: petId,
+    user_id: userId,
+    name,
+    species,
+    sex,
+    breed,
+    dob,
+    weight,
+    color,
+    imageUrl,
+    updated_at: now,
+  };
+}
+async function getPetNextEventsService({userId, petId, limit}) {
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+  const nowIso = isoNow();
+  const max = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : 3;
+
+  // Preload routines and medications for name lookups
+  const [routinesResp, medicationsResp] = await Promise.all([
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "routines!A1:Z10000",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medications!A1:Z10000",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+  ]);
+  const routineRows = routinesResp.data.values || [];
+  const medicationRows = medicationsResp.data.values || [];
+  const routineNameById = new Map(); // id -> name
+  for (let i = 1; i < routineRows.length; i++) {
+    const row = routineRows[i];
+    routineNameById.set(String(row[0]), String(row[2] || ""));
+  }
+  const medicationNameById = new Map();
+  for (let i = 1; i < medicationRows.length; i++) {
+    const row = medicationRows[i];
+    medicationNameById.set(String(row[0]), String(row[2] || ""));
+  }
+
+  // Get routine assignments upcoming
+  const raResp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "routineassignments!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const ra = raResp.data.values || [];
+  const routineEvents = [];
+  for (let i = 1; i < ra.length; i++) {
+    const cols = ra[i];
+    const assignmentId = String(cols[0] || "");
+    const routineId = String(cols[1] || "");
+    const pid = String(cols[2] || "");
+    const uid = String(cols[3] || "");
+    const nextActivity = String(cols[6] || "");
+    if (pid === String(petId) && uid === String(userId) && nextActivity) {
+      if (new Date(nextActivity).getTime() >= new Date(nowIso).getTime()) {
+        routineEvents.push({
+          type: "routine",
+          source_id: assignmentId,
+          title: routineNameById.get(routineId) || "Routine",
+          datetime: nextActivity,
+        });
+      }
+    }
+  }
+
+  // Get medication assignments upcoming
+  const maResp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "medicationassignments!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const ma = maResp.data.values || [];
+  const medEvents = [];
+  for (let i = 1; i < ma.length; i++) {
+    const cols = ma[i];
+    const assignmentId = String(cols[0] || "");
+    const medicationId = String(cols[1] || "");
+    const pid = String(cols[2] || "");
+    const uid = String(cols[3] || "");
+    const nextSupply = String(cols[6] || "");
+    const isCompleted = String(cols[8] || "").toLowerCase() === "true";
+    if (pid === String(petId) && uid === String(userId) && nextSupply && !isCompleted) {
+      if (new Date(nextSupply).getTime() >= new Date(nowIso).getTime()) {
+        medEvents.push({
+          type: "medication",
+          source_id: assignmentId,
+          title: medicationNameById.get(medicationId) || "Medication",
+          datetime: nextSupply,
+        });
+      }
+    }
+  }
+
+  // Get upcoming health events
+  const heResp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "healthevents!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const he = heResp.data.values || [];
+  const healthEvents = [];
+  for (let i = 1; i < he.length; i++) {
+    const cols = he[i];
+    const healthId = String(cols[0] || "");
+    const pid = String(cols[1] || "");
+    const uid = String(cols[2] || "");
+    const eventName = String(cols[4] || "");
+    const startOfActivity = String(cols[5] || "");
+    if (pid === String(petId) && uid === String(userId) && startOfActivity) {
+      if (new Date(startOfActivity).getTime() >= new Date(nowIso).getTime()) {
+        healthEvents.push({
+          type: "healthevent",
+          source_id: healthId,
+          title: eventName || "Health Event",
+          datetime: startOfActivity,
+        });
+      }
+    }
+  }
+
+  // Merge, sort, limit
+  const merged = [...routineEvents, ...medEvents, ...healthEvents]
+    .sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime())
+    .slice(0, max);
+
+  return merged;
+}
+
+async function performMedicationService({userId, body}) {
+  const medicationId = required(body.medication_id || body.med_id || body.id, "medication_id");
+  const petId = required(body.pet_id, "pet_id");
+  const givenAtRaw = required(body.given_at, "given_at");
+  const givenAt = String(givenAtRaw).trim();
+  const givenDate = new Date(givenAt);
+  if (Number.isNaN(givenDate.getTime())) {
+    const e = new Error("given_at must be a valid ISO datetime");
+    e.status = 400;
+    throw e;
+  }
+
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  // Read medications: A id, B user_id, C name, D start_of_supply, E number, F unit, G dose_number, H dose_unit, I total_doses, J created_at
+  const medsResp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "medications!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const mrows = medsResp.data.values || [];
+  if (mrows.length <= 1) {
+    const e = new Error("Medication not found");
+    e.status = 404;
+    throw e;
+  }
+  const medRow = mrows.find((cols, idx) => idx > 0 && String(cols[0]) === medicationId && String(cols[1]) === userId);
+  if (!medRow) {
+    const e = new Error("Medication not found");
+    e.status = 404;
+    throw e;
+  }
+  const everyNum = Number(medRow[4]);
+  const everyUnit = String(medRow[5] || "");
+  if (!Number.isFinite(everyNum) || !everyUnit) {
+    const e = new Error("Medication interval missing");
+    e.status = 400;
+    throw e;
+  }
+
+  // Find assignment row by medication_id + pet_id + user_id
+  const maResp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "medicationassignments!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const arows = maResp.data.values || [];
+  if (arows.length <= 1) {
+    const e = new Error("Assignment not found");
+    e.status = 404;
+    throw e;
+  }
+  // columns: A assignment_id, B medication_id, C pet_id, D user_id, E assigned_at, F last_given_at, G next_supply, H created_at, I is_completed
+  let foundIndex = -1;
+  let assignmentId = "";
+  for (let i = 1; i < arows.length; i++) {
+    const cols = arows[i];
+    if (String(cols[1]) === medicationId && String(cols[2]) === petId && String(cols[3]) === userId) {
+      foundIndex = i;
+      assignmentId = String(cols[0] || "");
+      break;
+    }
+  }
+  if (foundIndex === -1) {
+    const e = new Error("Assignment not found");
+    e.status = 404;
+    throw e;
+  }
+
+  const nextSupply = addIntervalISO(givenAt, everyNum, everyUnit);
+
+  const rowNumber = foundIndex + 1;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `medicationassignments!F${rowNumber}:G${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {values: [[givenAt, nextSupply]]},
+  });
+
+  // Activity log
+  const activityId = admin.firestore().collection("_ids").doc().id;
+  const now = isoNow();
+  const details = JSON.stringify({next_supply: nextSupply});
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "activitylog!A1",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {values: [[
+      activityId,
+      userId,
+      "perform_medication",
+      "medicationassignments",
+      assignmentId,
+      givenAt,
+      details,
+    ]]},
+  });
+
+  return {assignment_id: assignmentId, last_given_at: givenAt, next_supply: nextSupply, updated_at: now};
+}
+
 async function createMedicationService({userId, body}) {
   const rawName = required(body.medication_name || body.title || body.name, "medication_name");
   const medicationName = String(rawName).trim();
@@ -208,6 +683,89 @@ function addIntervalISO(baseIso, number, unit) {
       throw Object.assign(new Error("perform_every_unit must be one of hours|days|weeks|months"), {status: 400});
   }
   return dt.toISOString();
+}
+
+async function performRoutineService({userId, body}) {
+  const routineId = required(body.routine_id || body.id, "routine_id");
+  const petId = required(body.pet_id, "pet_id");
+  const performedAtRaw = required(body.performed_at, "performed_at");
+  const performedAt = String(performedAtRaw).trim();
+  const performedDate = new Date(performedAt);
+  if (Number.isNaN(performedDate.getTime())) {
+    const e = new Error("performed_at must be a valid ISO datetime"); e.status = 400; throw e;
+  }
+
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  // Read routines to get interval by routine_id + user_id
+  const routinesResp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "routines!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const rrows = routinesResp.data.values || [];
+  if (rrows.length <= 1) { const e = new Error("Routine not found"); e.status = 404; throw e; }
+  // columns: A routine_id, B user_id, C routine_name, D start_of_activity, E perform_every_number, F perform_every_unit
+  const routineRow = rrows.find((cols, idx) => idx > 0 && String(cols[0]) === routineId && String(cols[1]) === userId);
+  if (!routineRow) { const e = new Error("Routine not found"); e.status = 404; throw e; }
+  const everyNum = Number(routineRow[4]);
+  const everyUnit = String(routineRow[5] || "");
+  if (!Number.isFinite(everyNum) || !everyUnit) { const e = new Error("Routine interval missing"); e.status = 400; throw e; }
+
+  // Read routineassignments to locate assignment row by routine_id + pet_id + user_id
+  const raResp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "routineassignments!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const arows = raResp.data.values || [];
+  if (arows.length <= 1) { const e = new Error("Assignment not found"); e.status = 404; throw e; }
+  // columns: A assignment_id, B routine_id, C pet_id, D user_id, E assigned_at, F last_performed_at, G next_activity
+  let foundIndex = -1;
+  let assignmentId = "";
+  for (let i = 1; i < arows.length; i++) {
+    const cols = arows[i];
+    if (String(cols[1]) === routineId && String(cols[2]) === petId && String(cols[3]) === userId) {
+      foundIndex = i; assignmentId = String(cols[0] || ""); break;
+    }
+  }
+  if (foundIndex === -1) { const e = new Error("Assignment not found"); e.status = 404; throw e; }
+
+  const nextActivity = addIntervalISO(performedAt, everyNum, everyUnit);
+
+  // Update last_performed_at (F) and next_activity (G) in the found row (1-indexed rows)
+  const rowNumber = foundIndex + 1; // account for header
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `routineassignments!F${rowNumber}:G${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {values: [[performedAt, nextActivity]]},
+  });
+
+  // Log activity
+  const activityId = admin.firestore().collection("_ids").doc().id;
+  const now = isoNow();
+  const details = JSON.stringify({next_activity: nextActivity});
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "activitylog!A1",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {values: [[
+      activityId,
+      userId,
+      "perform_routine",
+      "routineassignments",
+      assignmentId,
+      performedAt,
+      details,
+    ]]},
+  });
+
+  return {assignment_id: assignmentId, last_performed_at: performedAt, next_activity: nextActivity, updated_at: now};
 }
 
 async function getPetsService() {
@@ -501,9 +1059,14 @@ async function createRoutineService({userId, body}) {
 module.exports = {
   getPetsService,
   createPetService,
+  getRoutinesByPetService,
+  updateRoutineService,
   createRoutineService,
   createMedicationService,
   createVisitService,
+  performMedicationService,
+  performRoutineService,
+  getPetNextEventsService,
 };
 
 async function createVisitService({userId, body}) {

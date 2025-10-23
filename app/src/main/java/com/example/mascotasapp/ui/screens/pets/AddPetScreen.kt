@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,9 +24,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.platform.LocalContext
+import com.example.mascotasapp.core.SelectedPetStore
+import com.example.mascotasapp.data.repository.PetsRepository
+import com.example.mascotasapp.data.model.Pet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStreamReader
@@ -36,9 +41,17 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.text.input.TextFieldValue
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
+import org.json.JSONObject
 
 @Composable
 fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val ctx = LocalContext.current
+    LaunchedEffect(Unit) {
+        SelectedPetStore.init(ctx)
+        val id = SelectedPetStore.get()
+        snackbarHostState.showSnackbar("Selected pet: ${id ?: "none"}")
+    }
     var name by remember { mutableStateOf("") }
     var speciesExpanded by remember { mutableStateOf(false) }
     val speciesOptions = listOf("Dog", "Cat", "Rabbit", "Bird", "Other")
@@ -61,9 +74,10 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
     var weightError by remember { mutableStateOf<String?>(null) }
     var colorError by remember { mutableStateOf<String?>(null) }
 
-    val ctx = LocalContext.current
     val scope = remember { CoroutineScope(Dispatchers.IO) }
     val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1" // Emulator Functions base (host loopback for Android emulator)
+
+    var isSubmitting by remember { mutableStateOf(false) }
 
     // Validators
     fun validateName(v: String): String? {
@@ -148,6 +162,7 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Add New Pet", style = MaterialTheme.typography.titleLarge) },
@@ -184,6 +199,7 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                     ) {
                         Button(
                             onClick = {
+                                if (isSubmitting) return@Button
                                 nameError = null
                                 speciesError = null
                                 sexError = null
@@ -256,7 +272,83 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                                 }
 
                                 val valid = listOf(nameError, speciesError, sexError, breedError, dobError, weightError, colorError).all { it == null }
-                                if (valid) onAdd()
+                                if (valid) {
+                                    isSubmitting = true
+                                    scope.launch {
+                                        try {
+                                            val url = URL("$baseUrl/createPet")
+                                            val conn = (url.openConnection() as HttpURLConnection).apply {
+                                                requestMethod = "POST"
+                                                doOutput = true
+                                                setRequestProperty("Content-Type", "application/json")
+                                                setRequestProperty("X-Debug-Uid", "dev-user")
+                                            }
+                                            val payload = """
+                                                {
+                                                  "name": ${jsonQ(nameT)},
+                                                  "species": ${jsonQ(species.trim())},
+                                                  "sex": ${jsonQ(sex.trim())},
+                                                  "breed": ${jsonQ(breedT)},
+                                                  "dob": ${jsonQ(dobT)},
+                                                  "weight": ${jsonQ(weightT)},
+                                                  "color": ${jsonQ(colorT)},
+                                                  "imageUrl": ${jsonQ("")}
+                                                }
+                                            """.trimIndent()
+                                            conn.outputStream.use { os ->
+                                                OutputStreamWriter(os).use { it.write(payload) }
+                                            }
+                                            val code = conn.responseCode
+                                            val respText = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                                                ?.bufferedReader()?.use { it.readText() } ?: ""
+                                            withContext(Dispatchers.Main) {
+                                                if (code in 200..299) {
+                                                    // Try to extract pet_id from response
+                                                    var newId: String? = null
+                                                    try {
+                                                        val obj = JSONObject(respText)
+                                                        newId = when {
+                                                            obj.has("pet_id") -> obj.getString("pet_id")
+                                                            obj.has("pet") && obj.getJSONObject("pet").has("pet_id") -> obj.getJSONObject("pet").getString("pet_id")
+                                                            else -> null
+                                                        }
+                                                        // Build Pet model and upsert into repository cache if possible
+                                                        val petObj = obj
+                                                        val pet = Pet(
+                                                            pet_id = petObj.optString("pet_id", newId ?: ""),
+                                                            user_id = petObj.optString("user_id"),
+                                                            name = petObj.optString("name"),
+                                                            imageUrl = petObj.optString("imageUrl"),
+                                                            species = petObj.optString("species"),
+                                                            sex = petObj.optString("sex"),
+                                                            breed = petObj.optString("breed"),
+                                                            date_of_birth = petObj.optString("date_of_birth", petObj.optString("dob")),
+                                                            weight_kg = petObj.optString("weight_kg", petObj.optString("weight")),
+                                                            color = petObj.optString("color"),
+                                                            created_at = petObj.optString("created_at")
+                                                        )
+                                                        // Upsert in background
+                                                        launch(Dispatchers.IO) { PetsRepository.upsert(pet) }
+                                                    } catch (_: Exception) { }
+                                                    if (newId != null) {
+                                                        SelectedPetStore.set(newId)
+                                                    }
+                                                    snackbarHostState.showSnackbar("Pet created")
+                                                    onAdd()
+                                                    onBack()
+                                                } else {
+                                                    snackbarHostState.showSnackbar("Error $code: $respText")
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            withContext(Dispatchers.Main) {
+                                                snackbarHostState.showSnackbar("Network error: ${e.message}")
+                                            }
+                                        } finally {
+                                            withContext(Dispatchers.Main) { isSubmitting = false }
+                                        }
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -267,8 +359,14 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                                 contentColor = Color.White,
                                 disabledContainerColor = Color(0xFFDDD6FE)
                             ),
-                            enabled = formValid
-                        ) { Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium) }
+                            enabled = formValid && !isSubmitting
+                        ) {
+                            if (isSubmitting) {
+                                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp), color = Color.White)
+                            } else {
+                                Text("+ Add Pet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                 }
             }

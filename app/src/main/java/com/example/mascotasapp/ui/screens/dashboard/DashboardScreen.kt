@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -43,6 +44,14 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
+import com.example.mascotasapp.core.SelectedPetStore
+import com.example.mascotasapp.data.repository.PetsRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONArray
 
 @Composable
 fun DashboardScreen(
@@ -56,7 +65,26 @@ fun DashboardScreen(
     onOpenPetProfile: () -> Unit = {},
     onOpenProfile: () -> Unit = {}
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val ctx = LocalContext.current
+    LaunchedEffect(Unit) {
+        SelectedPetStore.init(ctx)
+        PetsRepository.init(ctx)
+        val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1"
+        // Load cache immediately, then refresh in background
+        runCatching { PetsRepository.refresh(baseUrl) }
+        var id = SelectedPetStore.get()
+        if (id == null) {
+            val first = PetsRepository.pets.value.firstOrNull()
+            if (first != null) {
+                SelectedPetStore.set(first.pet_id)
+                id = first.pet_id
+            }
+        }
+        snackbarHostState.showSnackbar("Selected pet: ${id ?: "none"}")
+    }
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Surface(color = Color.White, tonalElevation = 0.dp, shadowElevation = 0.dp) {
                 TopAppBar(
