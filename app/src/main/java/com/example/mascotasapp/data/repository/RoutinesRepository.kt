@@ -76,6 +76,13 @@ object RoutinesRepository {
         saveCache(petId, JSONArray(sorted.map { toJson(it) }).toString())
     }
 
+    fun deleteRoutine(petId: String, assignmentId: String) {
+        val flow = perPetCache.getOrPut(petId) { MutableStateFlow(loadCache(petId)) }
+        val filtered = flow.value.filterNot { it.assignment_id == assignmentId }
+        flow.value = filtered
+        saveCache(petId, JSONArray(filtered.map { toJson(it) }).toString())
+    }
+
     private fun saveCache(petId: String, json: String) {
         if (!this::prefs.isInitialized) return
         prefs.edit().putString(KEY_ROUTINES_PREFIX + petId, json).apply()

@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -142,7 +143,11 @@ fun RoutineScreen(
                         lastDate = lastPretty,
                         nextDate = nextPretty,
                         onMarkDone = { onMarkDone(r.routine_id) },
-                        onEdit = { onEditItem(r.routine_id) }
+                        onDelete = {
+                            if (!selectedPetId.isNullOrBlank()) {
+                                RoutinesRepository.deleteRoutine(selectedPetId!!, r.assignment_id)
+                            }
+                        }
                     )
                 }
             }
@@ -157,34 +162,40 @@ fun RoutineScreen(
                 }
             }
             item {
-                MedicationCard(
-                    name = "Heartgard Plus",
-                    dose = "68mg - Monthly",
-                    reminder = "Reminder On",
-                    start = "Oct 1, 2024",
-                    end = "Oct 1, 2025",
-                    nextDose = "Dec 1, 2024",
-                    onMarkDone = {
-                        routineViewModel.onMarkDone("heartgard_plus")
-                        onMarkDone("heartgard_plus")
-                    },
-                    onEdit = { onEditMedication("heartgard_plus") }
-                )
+                var visible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+                if (visible) {
+                    MedicationCard(
+                        name = "Heartgard Plus",
+                        dose = "68mg - Monthly",
+                        reminder = "Reminder On",
+                        start = "Oct 1, 2024",
+                        end = "Oct 1, 2025",
+                        nextDose = "Dec 1, 2024",
+                        onMarkDone = {
+                            routineViewModel.onMarkDone("heartgard_plus")
+                            onMarkDone("heartgard_plus")
+                        },
+                        onDelete = { visible = false }
+                    )
+                }
             }
             item {
-                MedicationCard(
-                    name = "Apoquel",
-                    dose = "16mg - Twice daily",
-                    reminder = "Reminder Off",
-                    start = "Nov 15, 2024",
-                    end = "Dec 15, 2024",
-                    nextDose = "Today, 6:00 PM",
-                    onMarkDone = {
-                        routineViewModel.onMarkDone("apoquel")
-                        onMarkDone("apoquel")
-                    },
-                    onEdit = { onEditMedication("apoquel") }
-                )
+                var visible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+                if (visible) {
+                    MedicationCard(
+                        name = "Apoquel",
+                        dose = "16mg - Twice daily",
+                        reminder = "Reminder Off",
+                        start = "Nov 15, 2024",
+                        end = "Dec 15, 2024",
+                        nextDose = "Today, 6:00 PM",
+                        onMarkDone = {
+                            routineViewModel.onMarkDone("apoquel")
+                            onMarkDone("apoquel")
+                        },
+                        onDelete = { visible = false }
+                    )
+                }
             }
             item { Spacer(Modifier.height(8.dp)) }
         }
@@ -218,7 +229,7 @@ private fun RoutineCard(
     lastDate: String,
     nextDate: String,
     onMarkDone: () -> Unit,
-    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     highlightNextColor: Color? = null
 ) {
     Card(
@@ -259,17 +270,19 @@ private fun RoutineCard(
                 ) {
                     Text("Mark as done")
                 }
-                FilledTonalButton(
-                    onClick = onEdit,
+                val danger = Color(0xFFEF4444)
+                OutlinedButton(
+                    onClick = onDelete,
                     shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, danger),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = danger
+                    ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = Color(0xFFF3F4F6),
-                        contentColor = Color.Black
-                    )
-                ) { Text("Edit") }
+                        .height(44.dp)
+                ) { Text("Delete") }
             }
         }
     }
@@ -284,7 +297,7 @@ private fun MedicationCard(
     end: String,
     nextDose: String,
     onMarkDone: () -> Unit,
-    onEdit: () -> Unit
+    onDelete: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -333,17 +346,19 @@ private fun MedicationCard(
                         .weight(1f)
                         .height(44.dp)
                 ) { Text("Mark as done") }
-                FilledTonalButton(
-                    onClick = onEdit,
+                val danger = Color(0xFFEF4444)
+                OutlinedButton(
+                    onClick = onDelete,
                     shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, danger),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = danger
+                    ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = Color(0xFFF3F4F6),
-                        contentColor = Color.Black
-                    )
-                ) { Text("Edit") }
+                        .height(44.dp)
+                ) { Text("Delete") }
             }
             Text("Next dose: $nextDose", style = MaterialTheme.typography.bodySmall, color = Color.Black)
         }
