@@ -186,13 +186,23 @@ fun RoutineCareFormScreen(
                                                         setRequestProperty("Content-Type", "application/json")
                                                         setRequestProperty("X-Debug-Uid", "dev-user")
                                                     }
+                                                    val alsoIds = ui.alsoAddToPetIds.toList()
+                                                    val assignJson = buildString {
+                                                        append("[")
+                                                        append(JsonUtils.q(petId))
+                                                        for (extra in alsoIds) {
+                                                            append(",")
+                                                            append(JsonUtils.q(extra))
+                                                        }
+                                                        append("]")
+                                                    }
                                                     val payload = """
                                                         {
                                                           "routine_name": ${JsonUtils.q(careName.trim())},
                                                           "start_of_activity": ${JsonUtils.q(dateTime.trim())},
                                                           "perform_every_number": ${JsonUtils.q(everyValue.trim())},
                                                           "perform_every_unit": ${JsonUtils.q(everyUnit.trim())},
-                                                          "assign_to_pets": [${JsonUtils.q(petId)}]
+                                                          "assign_to_pets": $assignJson
                                                         }
                                                     """.trimIndent()
                                                     conn.outputStream.use { os -> java.io.OutputStreamWriter(os).use { it.write(payload) } }
@@ -239,10 +249,7 @@ fun RoutineCareFormScreen(
                                             }
                                         }
                                     }
-                                if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
-                                    onConfirm(careName)
-                                    onConfirmWithAlsoAdd(careName, ui.alsoAddToPetIds)
-                                }
+                                // Navigation is handled after network success; avoid duplicate callbacks here
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -361,60 +368,35 @@ fun RoutineCareFormScreen(
                 item { Text("Also add to", style = MaterialTheme.typography.titleSmall) }
                 item {
                     Column(Modifier.fillMaxWidth()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = alsoBuddy,
-                                onCheckedChange = { alsoBuddy = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = purple,
-                                    uncheckedColor = Color(0xFF9CA3AF),
-                                    checkmarkColor = Color.White
-                                )
-                            )
-                            Text("Buddy")
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = alsoLuna,
-                                onCheckedChange = { alsoLuna = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = purple,
-                                    uncheckedColor = Color(0xFF9CA3AF),
-                                    checkmarkColor = Color.White
-                                )
-                            )
-                            Text("Luna")
-            item { Text("Also add to", style = MaterialTheme.typography.titleSmall) }
-            item {
-                Column(Modifier.fillMaxWidth()) {
-                    when {
-                        ui.loading -> {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = purple)
+                        when {
+                            ui.loading -> {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = purple)
+                                }
                             }
-                        }
-                        ui.error != null -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(ui.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                                OutlinedButton(onClick = { vm.retry(context) }) { Text("Reintentar") }
+                            ui.error != null -> {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(ui.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                                    OutlinedButton(onClick = { vm.retry(context) }) { Text("Reintentar") }
+                                }
                             }
-                        }
-                        ui.otherPets.isEmpty() -> {
-                            Text("No other pets available", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
-                        }
-                        else -> {
-                            ui.otherPets.forEach { pet ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(
-                                        checked = ui.alsoAddToPetIds.contains(pet.pet_id),
-                                        onCheckedChange = { vm.togglePet(pet.pet_id) },
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = purple,
-                                            uncheckedColor = Color(0xFF9CA3AF),
-                                            checkmarkColor = Color.White
+                            ui.otherPets.isEmpty() -> {
+                                Text("No other pets available", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
+                            }
+                            else -> {
+                                ui.otherPets.forEach { pet ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(
+                                            checked = ui.alsoAddToPetIds.contains(pet.pet_id),
+                                            onCheckedChange = { vm.togglePet(pet.pet_id) },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = purple,
+                                                uncheckedColor = Color(0xFF9CA3AF),
+                                                checkmarkColor = Color.White
+                                            )
                                         )
-                                    )
-                                    Text(pet.name)
+                                        Text(pet.name)
+                                    }
                                 }
                             }
                         }
