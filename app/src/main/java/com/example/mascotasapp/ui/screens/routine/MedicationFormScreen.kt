@@ -30,9 +30,11 @@ fun MedicationFormScreen(
     initialEveryUnit: String = "hours",
     initialDoseValue: String = "",
     initialDoseUnit: String = "mg",
+    initialTotalDoses: String = "",
     initialAlsoBuddy: Boolean = true,
     initialAlsoLuna: Boolean = false,
     onConfirm: (name: String) -> Unit,
+    onConfirmWithTotal: (name: String, totalDoses: Int) -> Unit = { _, _ -> },
     onBack: () -> Unit
 ) {
     val bgSurface = Color(0xFFF9FAFB)
@@ -57,6 +59,9 @@ fun MedicationFormScreen(
     var doseUnitMenu by remember { mutableStateOf(false) }
     var doseValueError by remember { mutableStateOf<String?>(null) }
     var doseUnitError by remember { mutableStateOf<String?>(null) }
+
+    var totalDoses by remember { mutableStateOf(initialTotalDoses) }
+    var totalDosesError by remember { mutableStateOf<String?>(null) }
 
     var alsoBuddy by remember { mutableStateOf(initialAlsoBuddy) }
     var alsoLuna by remember { mutableStateOf(initialAlsoLuna) }
@@ -118,15 +123,23 @@ fun MedicationFormScreen(
         return if (n <= 0.0) "Must be > 0" else null
     }
     fun validateDoseUnit(v: String): String? = if (v.isBlank()) "Required" else if (!doseUnits.contains(v)) "Invalid option" else null
+    fun validateTotalDoses(v: String): String? {
+        val t = v.trim()
+        if (t.isEmpty()) return "Required"
+        if (!t.all { it.isDigit() }) return "Positive integer"
+        val n = t.toIntOrNull() ?: return "Positive integer"
+        return if (n <= 0) "Must be > 0" else null
+    }
 
-    val formValid by remember(medName, dateTime, everyValue, everyUnit, doseValue, doseUnit) {
+    val formValid by remember(medName, dateTime, everyValue, everyUnit, doseValue, doseUnit, totalDoses) {
         mutableStateOf(
             validateName(medName) == null &&
                 validateDateTime(dateTime) == null &&
                 validateEveryValue(everyValue) == null &&
                 validateEveryUnit(everyUnit) == null &&
                 validateDoseValue(doseValue) == null &&
-                validateDoseUnit(doseUnit) == null
+                validateDoseUnit(doseUnit) == null &&
+                validateTotalDoses(totalDoses) == null
         )
     }
 
@@ -169,8 +182,10 @@ fun MedicationFormScreen(
                                 everyUnitError = validateEveryUnit(everyUnit)
                                 doseValueError = validateDoseValue(doseValue)
                                 doseUnitError = validateDoseUnit(doseUnit)
-                                if (listOf(nameError, dateTimeError, everyValueError, everyUnitError, doseValueError, doseUnitError).all { it == null }) {
+                                totalDosesError = validateTotalDoses(totalDoses)
+                                if (listOf(nameError, dateTimeError, everyValueError, everyUnitError, doseValueError, doseUnitError, totalDosesError).all { it == null }) {
                                     onConfirm(medName)
+                                    onConfirmWithTotal(medName, totalDoses.toInt())
                                 }
                             },
                             modifier = Modifier
@@ -335,6 +350,26 @@ fun MedicationFormScreen(
                     }
                     if (doseUnitError != null) {
                         Text(doseUnitError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            // Total Doses
+            item {
+                LabeledField(label = "Total Doses *") {
+                    OutlinedTextField(
+                        value = totalDoses,
+                        onValueChange = {
+                            totalDoses = it.filter { ch -> ch.isDigit() }
+                            totalDosesError = validateTotalDoses(totalDoses)
+                        },
+                        placeholder = { Text("0") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = totalDosesError != null
+                    )
+                    if (totalDosesError != null) {
+                        Text(totalDosesError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
