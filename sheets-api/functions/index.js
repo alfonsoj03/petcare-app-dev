@@ -1,5 +1,5 @@
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
+const {setGlobalOptions} = require("firebase-functions/v2");
+const {onRequest} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService, createOrUpdateUserService} = require("./services");
@@ -7,7 +7,7 @@ const {getPetsService, createPetService, updatePetService, createRoutineService,
 setGlobalOptions({maxInstances: 10});
 
 // GET /routines?pet_id=XYZ — list routines for a pet (requires auth unless emulator bypass)
-exports.getRoutines = onRequest({cors: true}, async (req, res) => {
+exports.getRoutines = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "GET") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -39,7 +39,7 @@ exports.getRoutines = onRequest({cors: true}, async (req, res) => {
 });
 
 // POST /createUser — verify token and upsert user in Google Sheets
-exports.createUser = onRequest({cors: true}, async (req, res) => {
+exports.createUser = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -66,7 +66,7 @@ exports.createUser = onRequest({cors: true}, async (req, res) => {
 });
 
 // PUT /routines — update a routine assignment for a specific pet
-exports.updateRoutine = onRequest({cors: true}, async (req, res) => {
+exports.updateRoutine = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "PUT") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -97,7 +97,7 @@ exports.updateRoutine = onRequest({cors: true}, async (req, res) => {
 });
 
 // PUT /updatePet
-exports.updatePet = onRequest({cors: true}, async (req, res) => {
+exports.updatePet = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "PUT") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -130,7 +130,7 @@ exports.updatePet = onRequest({cors: true}, async (req, res) => {
 });
 
 // GET /pets/{pet_id}/next-events?limit=N — upcoming events for a pet
-exports.getPetNextEvents = onRequest({cors: true}, async (req, res) => {
+exports.getPetNextEvents = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "GET") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -169,7 +169,7 @@ exports.getPetNextEvents = onRequest({cors: true}, async (req, res) => {
 });
 
 // POST /medications/{med_id}/perform — mark medication given for a pet
-exports.performMedication = onRequest({cors: true}, async (req, res) => {
+exports.performMedication = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -204,7 +204,7 @@ exports.performMedication = onRequest({cors: true}, async (req, res) => {
 });
 
 // POST /routines/{routine_id}/perform — mark routine performed for a pet
-exports.performRoutine = onRequest({cors: true}, async (req, res) => {
+exports.performRoutine = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -240,7 +240,7 @@ exports.performRoutine = onRequest({cors: true}, async (req, res) => {
 });
 
 // POST /visits — create a vet visit in healthevents
-exports.createVisit = onRequest({cors: true}, async (req, res) => {
+exports.createVisit = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -275,7 +275,7 @@ exports.createVisit = onRequest({cors: true}, async (req, res) => {
 });
 
 // POST /medications
-exports.createMedication = onRequest({cors: true}, async (req, res) => {
+exports.createMedication = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -310,7 +310,7 @@ exports.createMedication = onRequest({cors: true}, async (req, res) => {
 });
 
 // GET /pets — list all pets (demo: no auth required)
-exports.getPets = onRequest({cors: true}, async (req, res) => {
+exports.getPets = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "GET") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -325,7 +325,7 @@ exports.getPets = onRequest({cors: true}, async (req, res) => {
 });
 
 // POST /routines — create routine + assignments + activity log
-exports.createRoutine = onRequest({cors: true}, async (req, res) => {
+exports.createRoutine = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({error: "Method Not Allowed"});
@@ -371,7 +371,7 @@ function bearer(req) {
 }
 
 // POST /createPet
-exports.createPet = onRequest({cors: true}, async (req, res) => {
+exports.createPet = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({error: "Method Not Allowed"});
