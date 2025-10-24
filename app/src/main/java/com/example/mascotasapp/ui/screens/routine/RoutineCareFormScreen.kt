@@ -22,14 +22,12 @@ import com.example.mascotasapp.core.SelectedPetStore
 import com.example.mascotasapp.core.JsonUtils
 import com.example.mascotasapp.data.repository.RoutinesRepository
 import com.example.mascotasapp.ui.components.LabeledField
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +49,7 @@ fun RoutineCareFormScreen(
 
     val context = LocalContext.current
     val vm: RoutineCareFormViewModel = viewModel()
-    val ui = vm.uiState
+    val ui by vm.uiState.collectAsState()
     LaunchedEffect(Unit) { vm.loadOtherPets(context) }
 
     var careName by remember { mutableStateOf(initialName) }
@@ -127,10 +125,33 @@ fun RoutineCareFormScreen(
         )
     }
     val snackbarHostState = remember { SnackbarHostState() }
-    var isSubmitting by remember { mutableStateOf(false) }
-    val scope = remember { CoroutineScope(Dispatchers.IO) }
+    val scope = rememberCoroutineScope()
     val baseUrl = ApiConfig.BASE_URL
     val isEdit = title.contains("Edit", ignoreCase = true) || confirmButtonText.contains("Save", ignoreCase = true)
+
+    LaunchedEffect(formValid) { vm.updateFormValidity(formValid) }
+
+    LaunchedEffect(ui.snackbarMessage) {
+        val msg = ui.snackbarMessage
+        if (msg != null) {
+            snackbarHostState.showSnackbar(message = msg, withDismissAction = true, duration = SnackbarDuration.Short)
+            vm.consumeSnackbar()
+        }
+    }
+
+    LaunchedEffect(ui.navigationEvent) {
+        when (ui.navigationEvent) {
+            is RoutineCareFormViewModel.NavigationEvent.NavigateBack -> {
+                vm.consumeNavigation()
+                onBack()
+            }
+            is RoutineCareFormViewModel.NavigationEvent.NavigateToRoutines -> {
+                vm.consumeNavigation()
+                onBack()
+            }
+            null -> Unit
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -173,42 +194,13 @@ fun RoutineCareFormScreen(
 
                                 // ✅ Si todo está válido:
                                 if (listOf(nameError, dateTimeError, everyValueError, everyUnitError).all { it == null }) {
-                                    isSubmitting = true
-                                    scope.launch {
-                                        vm.submitCreateRoutine(
-                                            context = context,
-                                            name = careName,
-                                            startDateTime = dateTime,
-                                            everyNumber = everyValue,
-                                            everyUnit = everyUnit
-                                        ) { ok ->
-                                            // ⚙️ Cuando termina la petición:
-                                            isSubmitting = false
-                                            scope.launch(Dispatchers.Main) {
-                                                if (ok) {
-                                                    // 🧾 Refrescar cache de rutinas
-                                                    withContext(Dispatchers.IO) {
-                                                        val selectedId = SelectedPetStore.get() ?: return@withContext
-                                                        RoutinesRepository.refresh(ApiConfig.BASE_URL, selectedId)
-                                                    }
-                                                    // 🎉 Mostrar snackbar de éxito
-                                                    snackbarHostState.showSnackbar(
-                                                        message = "Routine created successfully!",
-                                                        withDismissAction = true,
-                                                        duration = SnackbarDuration.Short
-                                                    )
-                                                    // 🔙 Volver a la pantalla anterior
-                                                    onBack()
-                                                } else {
-                                                    snackbarHostState.showSnackbar(
-                                                        message = "Failed to create routine. Please try again.",
-                                                        withDismissAction = true,
-                                                        duration = SnackbarDuration.Short
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
+                                    vm.onSubmit(
+                                        context = context,
+                                        name = careName,
+                                        startDateTime = dateTime,
+                                        everyNumber = everyValue,
+                                        everyUnit = everyUnit
+                                    )
                                 }
                             },
                             modifier = Modifier
@@ -220,9 +212,9 @@ fun RoutineCareFormScreen(
                                 contentColor = Color.White,
                                 disabledContainerColor = Color(0xFFDDD6FE)
                             ),
-                            enabled = formValid && !isSubmitting
+                            enabled = formValid && !ui.isSubmitting
                         ) {
-                            if (isSubmitting) {
+                            if (ui.isSubmitting) {
                                 CircularProgressIndicator(
                                     strokeWidth = 2.dp,
                                     modifier = Modifier.size(20.dp),
@@ -344,8 +336,11 @@ fun RoutineCareFormScreen(
                                 }
                             }
                             ui.error != null -> {
+                                val err = ui.error
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(ui.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                                    if (err != null) {
+                                        Text(err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                                    }
                                     OutlinedButton(onClick = { vm.retry(context) }) { Text("Reintentar") }
                                 }
                             }

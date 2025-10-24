@@ -1,9 +1,6 @@
 package com.example.mascotasapp.ui.screens.routine
 
 import android.content.Context
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mascotasapp.core.ApiConfig
@@ -12,27 +9,39 @@ import com.example.mascotasapp.data.model.Pet
 import com.example.mascotasapp.data.repository.PetsRepository
 import com.example.mascotasapp.data.repository.RoutinesRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 class RoutineCareFormViewModel : ViewModel() {
-    data class UiState(
+    data class CreateRoutineUiState(
         val loading: Boolean = false,
         val error: String? = null,
         val selectedPetId: String? = null,
         val otherPets: List<Pet> = emptyList(),
         val alsoAddToPetIds: Set<String> = emptySet(),
-        val submitting: Boolean = false,
-        val submitError: String? = null,
-        val submitSuccess: Boolean = false
+        val isValid: Boolean = false,
+        val isSubmitting: Boolean = false,
+        val snackbarMessage: String? = null,
+        val navigationEvent: NavigationEvent? = null
     )
 
-    var uiState by mutableStateOf(UiState())
-        private set
+    sealed class NavigationEvent {
+        data object NavigateBack : NavigationEvent()
+        data object NavigateToRoutines : NavigationEvent()
+    }
+
+    private val _uiState = MutableStateFlow(CreateRoutineUiState())
+    val uiState: StateFlow<CreateRoutineUiState> = _uiState.asStateFlow()
 
     fun loadOtherPets(context: Context) {
         viewModelScope.launch {
-            uiState = uiState.copy(loading = true, error = null)
+            _uiState.update { it.copy(loading = true, error = null) }
             try {
                 // Ensure stores are initialized
                 SelectedPetStore.init(context)
@@ -47,14 +56,9 @@ class RoutineCareFormViewModel : ViewModel() {
                     list = PetsRepository.pets.value
                 }
                 val others = if (selectedId == null) list else list.filter { it.pet_id != selectedId }
-                uiState = uiState.copy(
-                    loading = false,
-                    error = null,
-                    selectedPetId = selectedId,
-                    otherPets = others
-                )
+                _uiState.update { it.copy(loading = false, error = null, selectedPetId = selectedId, otherPets = others) }
             } catch (t: Throwable) {
-                uiState = uiState.copy(loading = false, error = t.message ?: "Unknown error")
+                _uiState.update { it.copy(loading = false, error = t.message ?: "Unknown error") }
             }
         }
     }
@@ -64,36 +68,67 @@ class RoutineCareFormViewModel : ViewModel() {
     }
 
     fun togglePet(id: String) {
-        val set = uiState.alsoAddToPetIds.toMutableSet()
+        val set = _uiState.value.alsoAddToPetIds.toMutableSet()
         if (set.contains(id)) set.remove(id) else set.add(id)
-        uiState = uiState.copy(alsoAddToPetIds = set)
+        _uiState.update { it.copy(alsoAddToPetIds = set) }
     }
 
     fun clearSelection() {
-        uiState = uiState.copy(alsoAddToPetIds = emptySet())
+        _uiState.update { it.copy(alsoAddToPetIds = emptySet()) }
     }
 
-    fun submitCreateRoutine(context: Context, name: String, startDateTime: String, everyNumber: String, everyUnit: String, onDone: (Boolean) -> Unit) {
-        if (uiState.submitting) return
+    fun updateFormValidity(valid: Boolean) {
+        _uiState.update { it.copy(isValid = valid) }
+    }
+
+    fun consumeSnackbar() {
+        _uiState.update { it.copy(snackbarMessage = null) }
+    }
+
+    fun consumeNavigation() {
+        _uiState.update { it.copy(navigationEvent = null) }
+    }
+
+    fun onSubmit(context: Context, name: String, startDateTime: String, everyNumber: String, everyUnit: String) {
+        val current = _uiState.value
+        if (current.isSubmitting || !current.isValid) return
         viewModelScope.launch {
-            uiState = uiState.copy(submitting = true, submitError = null, submitSuccess = false)
+            _uiState.update { it.copy(isSubmitting = true) }
             try {
                 SelectedPetStore.init(context)
                 RoutinesRepository.init(context)
                 val selectedId = SelectedPetStore.get() ?: throw IllegalStateException("No selected pet")
                 withContext(Dispatchers.IO) {
                     RoutinesRepository.createRoutine(ApiConfig.BASE_URL, selectedId, name, startDateTime, everyNumber, everyUnit)
-                    if (uiState.alsoAddToPetIds.isNotEmpty()) {
-                        uiState.alsoAddToPetIds.forEach { otherId ->
+                    if (_uiState.value.alsoAddToPetIds.isNotEmpty()) {
+                        _uiState.value.alsoAddToPetIds.forEach { otherId ->
                             RoutinesRepository.createRoutine(ApiConfig.BASE_URL, otherId, name, startDateTime, everyNumber, everyUnit)
                         }
                     }
+                    RoutinesRepository.refresh(ApiConfig.BASE_URL, selectedId)
                 }
-                uiState = uiState.copy(submitting = false, submitSuccess = true)
-                onDone(true)
+                _uiState.update { it.copy(isSubmitting = false, snackbarMessage = "Rutina creada", navigationEvent = NavigationEvent.NavigateBack) }
             } catch (t: Throwable) {
-                uiState = uiState.copy(submitting = false, submitError = t.message ?: "Unknown error", submitSuccess = false)
-                onDone(false)
+                val friendly = mapError(t)
+                _uiState.update { it.copy(isSubmitting = false, snackbarMessage = friendly) }
+            }
+        }
+    }
+
+    private fun mapError(t: Throwable): String = when (t) {
+        is UnknownHostException -> "No hay conexión"
+        is SocketTimeoutException -> "Tiempo de espera agotado"
+        is IllegalArgumentException -> "Datos inválidos"
+        is IllegalStateException -> t.message ?: "Estado inválido"
+        else -> {
+            val msg = t.message.orEmpty()
+            when {
+                msg.contains(" 400", ignoreCase = true) -> "Datos inválidos"
+                msg.contains(" 401", ignoreCase = true) || msg.contains(" 403", ignoreCase = true) -> "No autorizado"
+                msg.contains(" 404", ignoreCase = true) -> "No encontrado"
+                msg.contains(" 409", ignoreCase = true) -> "Conflicto con datos existentes"
+                msg.contains(" 5", ignoreCase = true) -> "Error del servidor"
+                else -> "Ocurrió un error"
             }
         }
     }
