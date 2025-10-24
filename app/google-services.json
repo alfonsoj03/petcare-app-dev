@@ -12,7 +12,20 @@
           "package_name": "com.example.mascotasapp"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "495773138295-6hv5n2tlmqbkvqd56i21ek86g0p4nfet.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mascotasapp",
+            "certificate_hash": "35ff15a12a729353a0ca4ca67167e1e94b97371f"
+          }
+        },
+        {
+          "client_id": "495773138295-8ptlbicbmca24usqug1jo3en9svk2rho.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBNoAZJU3EUPM5t-DCQ78bD5_Lj_sEIfmc"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "495773138295-8ptlbicbmca24usqug1jo3en9svk2rho.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

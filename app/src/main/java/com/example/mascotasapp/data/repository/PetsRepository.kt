@@ -9,6 +9,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import com.google.firebase.auth.FirebaseAuth
+import com.google.android.gms.tasks.Tasks
 
 object PetsRepository {
     private const val PREFS_NAME = "pets_cache"
@@ -33,9 +35,18 @@ object PetsRepository {
     fun getById(id: String): Pet? = _pets.value.firstOrNull { it.pet_id == id }
 
     suspend fun refresh(baseUrl: String) {
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            Tasks.await(auth.signInAnonymously())
+        }
+        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+
         val url = URL("$baseUrl/getPets")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
+            if (!idToken.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer $idToken")
+            }
         }
         val code = conn.responseCode
         if (code in 200..299) {

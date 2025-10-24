@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.platform.LocalContext
+import com.example.mascotasapp.core.ApiConfig
 import com.example.mascotasapp.core.SelectedPetStore
 import com.example.mascotasapp.data.repository.PetsRepository
 import com.example.mascotasapp.data.model.Pet
@@ -42,6 +43,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import org.json.JSONObject
+import com.google.firebase.auth.FirebaseAuth
+import com.google.android.gms.tasks.Tasks
 
 @Composable
 fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
@@ -75,7 +78,7 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
     var colorError by remember { mutableStateOf<String?>(null) }
 
     val scope = remember { CoroutineScope(Dispatchers.IO) }
-    val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1" // Emulator Functions base (host loopback for Android emulator)
+    val baseUrl = ApiConfig.BASE_URL
 
     var isSubmitting by remember { mutableStateOf(false) }
 
@@ -276,12 +279,21 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
                                     isSubmitting = true
                                     scope.launch {
                                         try {
+                                            val auth = FirebaseAuth.getInstance()
+                                            if (auth.currentUser == null) {
+                                                Tasks.await(auth.signInAnonymously())
+                                            }
+                                            val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+
                                             val url = URL("$baseUrl/createPet")
                                             val conn = (url.openConnection() as HttpURLConnection).apply {
                                                 requestMethod = "POST"
                                                 doOutput = true
                                                 setRequestProperty("Content-Type", "application/json")
                                                 setRequestProperty("X-Debug-Uid", "dev-user")
+                                                if (!idToken.isNullOrBlank()) {
+                                                    setRequestProperty("Authorization", "Bearer $idToken")
+                                                }
                                             }
                                             val payload = """
                                                 {

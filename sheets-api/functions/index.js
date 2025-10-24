@@ -2,7 +2,7 @@ const {setGlobalOptions} = require("firebase-functions");
 const {onRequest} = require("firebase-functions/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
-const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService} = require("./services");
+const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService, createOrUpdateUserService} = require("./services");
 
 setGlobalOptions({maxInstances: 10});
 
@@ -34,6 +34,33 @@ exports.getRoutines = onRequest({cors: true}, async (req, res) => {
   } catch (err) {
     const code = err.status || 500;
     logger.error("getRoutines failed", err);
+    return res.status(code).json({error: err.message || "Internal Error"});
+  }
+});
+
+// POST /createUser — verify token and upsert user in Google Sheets
+exports.createUser = onRequest({cors: true}, async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      return res.status(405).json({error: "Method Not Allowed"});
+    }
+    const token = bearer(req);
+    if (!token) return res.status(401).json({error: "Missing Bearer token"});
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(token);
+    } catch (err) {
+      logger.error("createUser token verify failed", err);
+      return res.status(401).json({error: "Invalid token"});
+    }
+    const userId = decoded.uid;
+    const email = decoded.email || (req.body && (typeof req.body === 'string' ? JSON.parse(req.body).email : req.body.email)) || "";
+    const name = decoded.name || (req.body && (typeof req.body === 'string' ? JSON.parse(req.body).name : req.body.name)) || "";
+    const result = await createOrUpdateUserService({userId, email, name});
+    return res.status(200).json(result);
+  } catch (err) {
+    const code = err.status || 500;
+    logger.error("createUser failed", err);
     return res.status(code).json({error: err.message || "Internal Error"});
   }
 });

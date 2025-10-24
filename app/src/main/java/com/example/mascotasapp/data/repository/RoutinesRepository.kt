@@ -10,6 +10,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import com.google.firebase.auth.FirebaseAuth
+import com.google.android.gms.tasks.Tasks
 
 object RoutinesRepository {
     private const val PREFS_NAME = "routines_cache"
@@ -47,10 +49,19 @@ object RoutinesRepository {
     fun routinesFlow(petId: String): StateFlow<List<RoutineItem>> = perPetCache.getOrPut(petId) { MutableStateFlow(loadCache(petId)) }
 
     suspend fun refresh(baseUrl: String, petId: String) {
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            Tasks.await(auth.signInAnonymously())
+        }
+        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+
         val url = URL("$baseUrl/pets/$petId/routines")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             setRequestProperty("X-Debug-Uid", "dev-user")
+            if (!idToken.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer $idToken")
+            }
         }
         val code = conn.responseCode
         if (code in 200..299) {
@@ -138,12 +149,20 @@ object RoutinesRepository {
         require(name.isNotBlank())
         require(everyNumber.isNotBlank())
         LocalDateTime.parse(startOfActivity, dtf)
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            Tasks.await(auth.signInAnonymously())
+        }
+        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
         val url = URL("$baseUrl/routines")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("X-Debug-Uid", "dev-user")
+            if (!idToken.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer $idToken")
+            }
         }
         val payload = JSONObject().apply {
             put("pet_id", petId)
@@ -176,12 +195,20 @@ object RoutinesRepository {
 
     suspend fun updateRoutine(baseUrl: String, petId: String, assignmentId: String, name: String?, startOfActivity: String?, everyNumber: String?, everyUnit: String?): RoutineItem {
         if (startOfActivity != null) LocalDateTime.parse(startOfActivity, dtf)
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            Tasks.await(auth.signInAnonymously())
+        }
+        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
         val url = URL("$baseUrl/routines")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "PUT"
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("X-Debug-Uid", "dev-user")
+            if (!idToken.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer $idToken")
+            }
         }
         val payload = JSONObject().apply {
             put("assignment_id", assignmentId)

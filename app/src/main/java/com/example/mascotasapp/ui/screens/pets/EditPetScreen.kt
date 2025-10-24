@@ -35,6 +35,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import com.google.firebase.auth.FirebaseAuth
+import com.google.android.gms.tasks.Tasks
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -312,12 +314,21 @@ fun EditPetScreen(petId: String, onBack: () -> Unit = {}, onSave: () -> Unit = {
                                     isSubmitting = true
                                     scope.launch {
                                         try {
+                                            val auth = FirebaseAuth.getInstance()
+                                            if (auth.currentUser == null) {
+                                                Tasks.await(auth.signInAnonymously())
+                                            }
+                                            val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+
                                             val url = URL(baseUrl + "/updatePet")
                                             val conn = (url.openConnection() as HttpURLConnection).apply {
                                                 requestMethod = "PUT"
                                                 doOutput = true
                                                 setRequestProperty("Content-Type", "application/json")
                                                 setRequestProperty("X-Debug-Uid", "dev-user")
+                                                if (!idToken.isNullOrBlank()) {
+                                                    setRequestProperty("Authorization", "Bearer $idToken")
+                                                }
                                             }
                                             val payload = """
                                                 {

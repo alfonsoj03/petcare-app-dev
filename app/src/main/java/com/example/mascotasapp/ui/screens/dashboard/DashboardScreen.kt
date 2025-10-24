@@ -49,6 +49,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalContext
 import com.example.mascotasapp.core.SelectedPetStore
+import com.example.mascotasapp.core.ApiConfig
 import com.example.mascotasapp.data.repository.PetsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -75,7 +76,7 @@ fun DashboardScreen(
     LaunchedEffect(Unit) {
         SelectedPetStore.init(ctx)
         PetsRepository.init(ctx)
-        val baseUrl = "http://10.0.2.2:5001/petcare-ac3c2/us-central1"
+        val baseUrl = ApiConfig.BASE_URL
         // Load cache immediately, then refresh in background
         runCatching { PetsRepository.refresh(baseUrl) }
         var id = SelectedPetStore.get()

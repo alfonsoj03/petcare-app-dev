@@ -1,5 +1,5 @@
 package com.example.mascotasapp.core
 
 object ApiConfig {
-    const val BASE_URL = "http://10.0.2.2:5001/petcare-ac3c2/us-central1"
+    const val BASE_URL = "https://us-central1-petcare-ac3c2.cloudfunctions.net"
 }

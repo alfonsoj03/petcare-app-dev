@@ -8,6 +8,65 @@ async function getSheetsClient() {
   return google.sheets({version: "v4", auth});
 }
 
+// Upsert user into users sheet: columns: user_id, email, name, created_at, last_login
+async function createOrUpdateUserService({userId, email, name}) {
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+  const now = isoNow();
+
+  // Load users sheet
+  const resp = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "users!A1:Z10000",
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const rows = resp.data.values || [];
+  // If only header or empty, just append new row
+  if (rows.length <= 1) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "users!A1",
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {values: [[userId, email || "", name || "", now, now]]},
+    });
+    return {status: "created", user_id: userId};
+  }
+  // Find by user_id or email
+  let foundIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    const cols = rows[i];
+    const uid = String(cols[0] || "");
+    const em = String(cols[1] || "");
+    if (uid === String(userId) || (email && em.toLowerCase() === String(email).toLowerCase())) {
+      foundIndex = i; break;
+    }
+  }
+  if (foundIndex === -1) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "users!A1",
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {values: [[userId, email || "", name || "", now, now]]},
+    });
+    return {status: "created", user_id: userId};
+  }
+  const rowNumber = foundIndex + 1;
+  // Update name (if provided) and last_login
+  const current = rows[foundIndex];
+  const currentName = String(current[2] || "");
+  const newName = name && String(name).trim() ? String(name).trim() : currentName;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `users!C${rowNumber}:E${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {values: [[newName, current[3] || now, now]]},
+  });
+  return {status: "updated", user_id: userId};
+}
+
 async function getRoutinesByPetService({userId, petId}) {
   const spreadsheetId = ensureSpreadsheetId();
   const sheets = await getSheetsClient();
@@ -1073,6 +1132,7 @@ module.exports = {
   performMedicationService,
   performRoutineService,
   getPetNextEventsService,
+  createOrUpdateUserService,
 };
 
 async function createVisitService({userId, body}) {
