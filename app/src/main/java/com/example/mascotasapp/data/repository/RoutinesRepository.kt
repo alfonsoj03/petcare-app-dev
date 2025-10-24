@@ -41,6 +41,48 @@ object RoutinesRepository {
         }
     }
 
+    // Create a routine and multiple assignments in one request using assign_to_pets
+    suspend fun createRoutineForPets(
+        baseUrl: String,
+        petIds: Set<String>,
+        name: String,
+        startOfActivity: String,
+        everyNumber: String,
+        everyUnit: String
+    ) {
+        require(petIds.isNotEmpty())
+        require(name.isNotBlank())
+        require(everyNumber.isNotBlank())
+        LocalDateTime.parse(startOfActivity, dtf)
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            Tasks.await(auth.signInAnonymously())
+        }
+        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+        val url = URL("$baseUrl/createRoutine")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("X-Debug-Uid", "dev-user")
+            if (!idToken.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer $idToken")
+            }
+        }
+        val payload = JSONObject().apply {
+            put("routine_name", name)
+            put("start_of_activity", startOfActivity)
+            put("perform_every_number", everyNumber)
+            put("perform_every_unit", everyUnit)
+            put("assign_to_pets", JSONArray(petIds.toList()))
+        }.toString()
+        conn.outputStream.use { it.write(payload.toByteArray()) }
+        val code = conn.responseCode
+        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+        if (code !in 200..299) throw RuntimeException("create routine error $code: $body")
+        // We will refresh after this in the caller
+    }
+
     fun getCached(petId: String): List<RoutineItem> {
         val flow = perPetCache.getOrPut(petId) { MutableStateFlow(loadCache(petId)) }
         return flow.value
@@ -55,7 +97,7 @@ object RoutinesRepository {
         }
         val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
 
-        val url = URL("$baseUrl/pets/$petId/routines")
+        val url = URL("$baseUrl/getRoutines?pet_id=$petId")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             setRequestProperty("X-Debug-Uid", "dev-user")
@@ -154,7 +196,7 @@ object RoutinesRepository {
             Tasks.await(auth.signInAnonymously())
         }
         val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
-        val url = URL("$baseUrl/routines")
+        val url = URL("$baseUrl/createRoutine")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
@@ -200,7 +242,7 @@ object RoutinesRepository {
             Tasks.await(auth.signInAnonymously())
         }
         val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
-        val url = URL("$baseUrl/routines")
+        val url = URL("$baseUrl/updateRoutine")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "PUT"
             doOutput = true

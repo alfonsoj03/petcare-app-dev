@@ -8,6 +8,47 @@ async function getSheetsClient() {
   return google.sheets({version: "v4", auth});
 }
 
+async function deleteRoutineService({userId, body}) {
+  const routineId = required(body.routine_id || body.id, "routine_id");
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  // Load sheets
+  const [routinesResp, raResp] = await Promise.all([
+    sheets.spreadsheets.values.get({ spreadsheetId, range: "routines!A1:Z10000", valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "FORMATTED_STRING" }),
+    sheets.spreadsheets.values.get({ spreadsheetId, range: "routineassignments!A1:Z10000", valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "FORMATTED_STRING" }),
+  ]);
+  const rrows = routinesResp.data.values || [];
+  const arows = raResp.data.values || [];
+  if (rrows.length === 0) { const e = new Error("routines sheet missing"); e.status = 500; throw e; }
+  if (arows.length === 0) { const e = new Error("routineassignments sheet missing"); e.status = 500; throw e; }
+
+  // Filter out routine row for this user
+  const rHeader = rrows[0];
+  const rFiltered = [rHeader, ...rrows.slice(1).filter(cols => !(String(cols[0]) === String(routineId) && String(cols[1]) === String(userId)))];
+  // Filter out all assignments for this routine and user
+  const aHeader = arows[0];
+  const aFiltered = [aHeader, ...arows.slice(1).filter(cols => !(String(cols[1]) === String(routineId) && String(cols[3]) === String(userId)))];
+
+  // Update sheets with filtered values
+  await sheets.spreadsheets.values.update({ spreadsheetId, range: "routines!A1", valueInputOption: "USER_ENTERED", requestBody: { values: rFiltered } });
+  await sheets.spreadsheets.values.update({ spreadsheetId, range: "routineassignments!A1", valueInputOption: "USER_ENTERED", requestBody: { values: aFiltered } });
+
+  // Log activity
+  const activityId = admin.firestore().collection("_ids").doc().id;
+  const now = isoNow();
+  const details = JSON.stringify({ routine_id: routineId });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "activitylog!A1",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [[ activityId, userId, "DELETE_ROUTINE", "routines", routineId, now, details ]] },
+  });
+
+  return { routine_id: routineId, deleted: true, deleted_at: now };
+}
+
 // Upsert user into users sheet: columns: user_id, email, name, created_at, last_login
 async function createOrUpdateUserService({userId, email, name}) {
   const spreadsheetId = ensureSpreadsheetId();
@@ -1133,6 +1174,7 @@ module.exports = {
   performRoutineService,
   getPetNextEventsService,
   createOrUpdateUserService,
+  deleteRoutineService,
 };
 
 async function createVisitService({userId, body}) {

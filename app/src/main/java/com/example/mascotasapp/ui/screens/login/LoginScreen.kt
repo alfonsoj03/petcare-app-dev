@@ -60,6 +60,28 @@ fun LoginScreen(
     }
     val googleClient = remember { GoogleSignIn.getClient(context, gso) }
 
+    // Show diagnostics info on open (spreadsheet_id from backend)
+    LaunchedEffect(Unit) {
+        try {
+            val txt = withContext(Dispatchers.IO) {
+                val url = URL(ApiConfig.BASE_URL + "/diagnostics")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    setRequestProperty("Accept", "application/json")
+                }
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    conn.inputStream.bufferedReader().use { it.readText() }
+                } else {
+                    conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
+                }
+            }
+            snackbar.showSnackbar("Diagnostics: ${'$'}txt")
+        } catch (e: Exception) {
+            snackbar.showSnackbar("Diagnostics error: ${'$'}{e.message}")
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         scope.launch {
             try {

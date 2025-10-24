@@ -98,13 +98,21 @@ class RoutineCareFormViewModel : ViewModel() {
                 SelectedPetStore.init(context)
                 RoutinesRepository.init(context)
                 val selectedId = SelectedPetStore.get() ?: throw IllegalStateException("No selected pet")
+                val allPetIds = buildSet<String> {
+                    add(selectedId)
+                    addAll(_uiState.value.alsoAddToPetIds)
+                }
                 withContext(Dispatchers.IO) {
-                    RoutinesRepository.createRoutine(ApiConfig.BASE_URL, selectedId, name, startDateTime, everyNumber, everyUnit)
-                    if (_uiState.value.alsoAddToPetIds.isNotEmpty()) {
-                        _uiState.value.alsoAddToPetIds.forEach { otherId ->
-                            RoutinesRepository.createRoutine(ApiConfig.BASE_URL, otherId, name, startDateTime, everyNumber, everyUnit)
-                        }
-                    }
+                    // Create routine and assignments in one request
+                    RoutinesRepository.createRoutineForPets(
+                        baseUrl = ApiConfig.BASE_URL,
+                        petIds = allPetIds,
+                        name = name,
+                        startOfActivity = startDateTime,
+                        everyNumber = everyNumber,
+                        everyUnit = everyUnit
+                    )
+                    // Refresh routines for the selected pet so the new assignment appears
                     RoutinesRepository.refresh(ApiConfig.BASE_URL, selectedId)
                 }
                 _uiState.update { it.copy(isSubmitting = false, snackbarMessage = "Rutina creada", navigationEvent = NavigationEvent.NavigateBack) }

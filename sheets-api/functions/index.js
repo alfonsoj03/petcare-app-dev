@@ -2,9 +2,49 @@ const {setGlobalOptions} = require("firebase-functions/v2");
 const {onRequest} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
-const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService, createOrUpdateUserService} = require("./services");
+const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService, createOrUpdateUserService, deleteRoutineService} = require("./services");
 
 setGlobalOptions({maxInstances: 10});
+
+// POST /deleteRoutine — delete routine and all its assignments for the user
+exports.deleteRoutine = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      return res.status(405).json({error: "Method Not Allowed"});
+    }
+    // Auth
+    let userId;
+    const allowBypass = process.env.ALLOW_INSECURE_EMULATOR === "1";
+    if (allowBypass) {
+      userId = (req.headers["x-debug-uid"] || req.headers["X-Debug-Uid"] || "dev-user") + "";
+    } else {
+      const token = bearer(req);
+      if (!token) return res.status(401).json({error: "Missing Bearer token"});
+      const decoded = await admin.auth().verifyIdToken(token);
+      userId = decoded.uid;
+    }
+
+    const result = await deleteRoutineService({userId, body: req.body || {}});
+    return res.status(200).json(result);
+  } catch (err) {
+    const code = err.status || 500;
+    logger.error("deleteRoutine failed", err);
+    return res.status(code).json({error: err.message || "Internal Error"});
+  }
+});
+
+// GET /diagnostics — returns current config info (for debugging)
+exports.diagnostics = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
+  try {
+    const spreadsheetId = process.env.SPREADSHEET_ID || "";
+    // Optionally mask in production; for dev we return plainly
+    return res.status(200).json({spreadsheet_id: spreadsheetId});
+  } catch (err) {
+    const code = err.status || 500;
+    logger.error("diagnostics failed", err);
+    return res.status(code).json({error: err.message || "Internal Error"});
+  }
+});
 
 // GET /routines?pet_id=XYZ — list routines for a pet (requires auth unless emulator bypass)
 exports.getRoutines = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
