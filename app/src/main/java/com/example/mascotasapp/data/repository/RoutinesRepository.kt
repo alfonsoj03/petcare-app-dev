@@ -136,6 +136,29 @@ object RoutinesRepository {
         saveCache(petId, JSONArray(filtered.map { toJson(it) }).toString())
     }
 
+    suspend fun deleteRoutineRemote(baseUrl: String, routineId: String) {
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            Tasks.await(auth.signInAnonymously())
+        }
+        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+        val url = URL("$baseUrl/deleteRoutine")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("X-Debug-Uid", "dev-user")
+            if (!idToken.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer $idToken")
+            }
+        }
+        val payload = JSONObject().apply { put("routine_id", routineId) }.toString()
+        conn.outputStream.use { it.write(payload.toByteArray()) }
+        val code = conn.responseCode
+        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+        if (code !in 200..299) throw RuntimeException("delete routine error $code: $body")
+    }
+
     private fun saveCache(petId: String, json: String) {
         if (!this::prefs.isInitialized) return
         prefs.edit().putString(KEY_ROUTINES_PREFIX + petId, json).apply()

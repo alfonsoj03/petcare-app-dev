@@ -38,6 +38,14 @@ import java.util.Locale
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 import com.example.mascotasapp.ui.screens.routine.RoutineViewModel
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import kotlinx.coroutines.launch
+import com.example.mascotasapp.core.ApiConfig
+import androidx.compose.runtime.rememberCoroutineScope
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,7 +68,14 @@ fun RoutineScreen(
     val orangeSurface = Color(0xFFFFF3E0)
     val brandPurple = Color(0xFF8B5CF6)
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // Confirm-delete dialog state: Pair<assignment_id, routine_id>
+    var pendingDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -143,11 +158,7 @@ fun RoutineScreen(
                         lastDate = lastPretty,
                         nextDate = nextPretty,
                         onMarkDone = { onMarkDone(r.routine_id) },
-                        onDelete = {
-                            if (!selectedPetId.isNullOrBlank()) {
-                                RoutinesRepository.deleteRoutine(selectedPetId!!, r.assignment_id)
-                            }
-                        }
+                        onDelete = { pendingDelete = r.assignment_id to r.routine_id }
                     )
                 }
             }
@@ -215,6 +226,42 @@ fun RoutineScreen(
                         Text("Desde la hora original")
                     }
                 }
+            )
+        }
+
+        // Confirm delete dialog
+        if (pendingDelete != null) {
+            val (assignmentId, routineId) = pendingDelete!!
+            AlertDialog(
+                onDismissRequest = { pendingDelete = null },
+                title = { Text("¿Eliminar rutina?") },
+                text = { Text("Borrará esta rutina para todos los pets asociados. ¿Estás seguro?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val petId = SelectedPetStore.selectedPetId.value
+                        if (!petId.isNullOrBlank()) {
+                            // Remove from cache instantly so UI updates
+                            RoutinesRepository.deleteRoutine(petId, assignmentId)
+                            // Call backend to delete routine and all assignments for this routine_id
+                            scope.launch {
+                                try {
+                                    RoutinesRepository.deleteRoutineRemote(ApiConfig.BASE_URL, routineId)
+                                } catch (t: Throwable) {
+                                    snackbarHostState.showSnackbar(
+                                        message = t.message ?: "Error al eliminar",
+                                        withDismissAction = true,
+                                        duration = SnackbarDuration.Short
+                                    )
+                                } finally {
+                                    // Ensure cache is consistent with server
+                                    try { RoutinesRepository.refresh(ApiConfig.BASE_URL, petId) } catch (_: Throwable) {}
+                                }
+                            }
+                        }
+                        pendingDelete = null
+                    }) { Text("Eliminar") }
+                },
+                dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancelar") } }
             )
         }
     }
