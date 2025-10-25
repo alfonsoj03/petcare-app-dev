@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.example.mascotasapp.R
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,6 +32,16 @@ fun ProfileScreen(onBack: () -> Unit = {}) {
     val bgSurface = Color(0xFFF9FAFB)
     val accent = Color(0xFF8B5CF6)
     val green = Color(0xFF10B981)
+    val user = FirebaseAuth.getInstance().currentUser
+    val displayName = user?.displayName?.takeIf { it.isNotBlank() }
+    val nameSurname = displayName?.let {
+        val parts = it.trim().split(" ").filter { p -> p.isNotBlank() }
+        when {
+            parts.size >= 2 -> parts[0] + " " + parts[1]
+            else -> it
+        }
+    } ?: "Guest"
+    val emailText = user?.email ?: ""
 
     Scaffold(
         topBar = {
@@ -75,14 +86,14 @@ fun ProfileScreen(onBack: () -> Unit = {}) {
         ) {
             // Avatar
             Image(
-                painter = painterResource(id = R.drawable.foto_stock_perrito),
+                painter = painterResource(id = R.drawable.mascota),
                 contentDescription = null,
                 modifier = Modifier
                     .size(88.dp)
                     .clip(CircleShape)
             )
-            Text("Sarah Johnson", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("sarah.johnson@email.com", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
+            Text(nameSurname, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(emailText, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
             Button(
                 onClick = { /* edit profile */ },
                 colors = ButtonDefaults.buttonColors(containerColor = green, contentColor = Color.White),

@@ -76,7 +76,7 @@ fun AppRoot() {
     val navController = rememberNavController()
     val items = Destinations.bottomItems
     var selectedPetId by remember { mutableStateOf<String?>(null) }
-    var selectedPetImageRes by remember { mutableStateOf(R.drawable.foto_stock_perrito) }
+    var selectedPetImageRes by remember { mutableStateOf(R.drawable.mascota) }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 

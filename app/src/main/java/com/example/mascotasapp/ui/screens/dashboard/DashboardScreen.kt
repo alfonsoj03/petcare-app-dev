@@ -89,8 +89,12 @@ fun DashboardScreen(
         }
         snackbarHostState.showSnackbar("Selected pet: ${id ?: "none"}")
     }
-    // Determine if user has pets by calling the same emulator Cloud Function used in PetsScreen
+    // Determine if user has pets and which one is selected
     val pets by PetsRepository.pets.collectAsStateWithLifecycle()
+    val selectedPetId by SelectedPetStore.selectedPetId.collectAsStateWithLifecycle()
+    val selectedPet = remember(pets, selectedPetId) {
+        pets.firstOrNull { it.pet_id == selectedPetId } ?: pets.firstOrNull()
+    }
     val hasPets = pets.isNotEmpty()
 
     Scaffold(
@@ -211,9 +215,22 @@ fun DashboardScreen(
                     modifier = contentModifier,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    item { PetCard(onOpenHealth = onOpenHealth, onOpenRoutine = onOpenRoutine, hasHealthActivity = hasHealthActivity, hasRoutineActivity = hasRoutineActivity) }
+                    item {
+                        PetCard(
+                            petName = selectedPet?.name ?: "Pet",
+                            petBreed = selectedPet?.breed ?: "",
+                            petAgeYears = selectedPet?.date_of_birth?.let { safeYearsFromDob(it) } ?: 0,
+                            onOpenHealth = onOpenHealth,
+                            onOpenRoutine = onOpenRoutine,
+                            hasHealthActivity = hasHealthActivity,
+                            hasRoutineActivity = hasRoutineActivity
+                        )
+                    }
                     item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
-                    item { RecentActivitySection(recent) }
+                    item {
+                        val petName = selectedPet?.name ?: "your pet"
+                        RecentActivitySectionForPet(petName = petName, recent = mutableListOf<Activity>().apply { addAll(recent) })
+                    }
                 }
             }
         }
@@ -281,12 +298,20 @@ data class Activity(
 )
 
 @Composable
-private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit, hasHealthActivity: Boolean, hasRoutineActivity: Boolean) {
+private fun PetCard(
+    petName: String,
+    petBreed: String,
+    petAgeYears: Int,
+    onOpenHealth: () -> Unit,
+    onOpenRoutine: () -> Unit,
+    hasHealthActivity: Boolean,
+    hasRoutineActivity: Boolean
+) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primary)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
-                    painter = painterResource(id = R.drawable.foto_stock_perrito),
+                    painter = painterResource(id = R.drawable.mascota),
                     contentDescription = "Pet avatar",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -295,8 +320,15 @@ private fun PetCard(onOpenHealth: () -> Unit, onOpenRoutine: () -> Unit, hasHeal
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Buddy", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
-                    Text("Golden Retriever • 3 years", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f))
+                    Text(petName, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+                    val subtitle = buildString {
+                        if (petBreed.isNotBlank()) append(petBreed)
+                        if (petAgeYears >= 0) {
+                            if (isNotEmpty()) append(" • ")
+                            append("$petAgeYears years")
+                        }
+                    }
+                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f))
                 }
                 Icon(imageVector = Icons.Default.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
             }
@@ -490,7 +522,7 @@ private fun QuickActionCard(
 }
 
 @Composable
-private fun RecentActivitySection(recent: List<Activity>) {
+private fun RecentActivitySectionForPet(petName: String, recent: List<Activity>) {
     Text(text = "Recent Activity", style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(8.dp))
     if (recent.isEmpty()) {
@@ -501,7 +533,7 @@ private fun RecentActivitySection(recent: List<Activity>) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "No recent activity.",
+                text = "No recent activity for $petName.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.secondary,
                 textAlign = TextAlign.Center
@@ -521,6 +553,39 @@ private fun RecentActivitySection(recent: List<Activity>) {
             }
         }
     }
+}
+
+// Age helpers (keep consistent with PetsScreen)
+private fun safeYearsFromDob(dob: String): Int = runCatching {
+    if (dob.isBlank()) return 0
+    val today = java.time.LocalDate.now()
+    val birth = parseFlexibleDate(dob) ?: return 0
+    java.time.Period.between(birth, today).years.coerceAtLeast(0)
+}.getOrDefault(0)
+
+private fun parseFlexibleDate(input: String): java.time.LocalDate? {
+    val s = input.trim()
+    runCatching {
+        val inst = java.time.Instant.parse(s)
+        return inst.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    }
+    val patterns = arrayOf("yyyy-MM-dd", "yyyy/MM/dd", "dd/MM/yyyy", "MM/dd/yyyy", "dd-MM-yyyy", "yyyyMMdd")
+    for (p in patterns) {
+        val fmt = java.time.format.DateTimeFormatter.ofPattern(p)
+        val parsed = runCatching { java.time.LocalDate.parse(s, fmt) }.getOrNull()
+        if (parsed != null) return parsed
+    }
+    if (s.length >= 10) {
+        val first10 = s.substring(0, 10)
+        val parsed = runCatching { java.time.LocalDate.parse(first10) }.getOrNull()
+        if (parsed != null) return parsed
+    }
+    val yearOnly = s.takeWhile { it.isDigit() }
+    if (yearOnly.length == 4) {
+        val year = runCatching { yearOnly.toInt() }.getOrNull()
+        if (year != null && year in 1900..3000) return java.time.LocalDate.of(year, 1, 1)
+    }
+    return null
 }
 
 @Composable

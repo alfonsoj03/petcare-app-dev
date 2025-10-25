@@ -86,7 +86,7 @@ data class PetExtended(
     val upToDate: Boolean,
     val nextEvent: String,
     val eventType: EventType,
-    val imageRes: Int = R.drawable.foto_stock_perrito
+    val imageRes: Int = R.drawable.mascota
 )
 
 @Composable
@@ -203,10 +203,39 @@ fun PetsScreen(
 
 private fun safeYearsFromDob(dob: String): Int = runCatching {
     if (dob.isBlank()) return 0
-    val year = dob.substring(0, 4).toInt()
-    val nowYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-    (nowYear - year).coerceAtLeast(0)
+    val today = java.time.LocalDate.now()
+    val birth = parseFlexibleDate(dob) ?: return 0
+    java.time.Period.between(birth, today).years.coerceAtLeast(0)
 }.getOrDefault(0)
+
+private fun parseFlexibleDate(input: String): java.time.LocalDate? {
+    val s = input.trim()
+    // Try ISO instant like 2023-05-01T00:00:00Z
+    runCatching {
+        val inst = java.time.Instant.parse(s)
+        return inst.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    }
+    // Try common date patterns
+    val patterns = arrayOf("yyyy-MM-dd", "yyyy/MM/dd", "dd/MM/yyyy", "MM/dd/yyyy", "dd-MM-yyyy", "yyyyMMdd")
+    for (p in patterns) {
+        val fmt = java.time.format.DateTimeFormatter.ofPattern(p)
+        val parsed = runCatching { java.time.LocalDate.parse(s, fmt) }.getOrNull()
+        if (parsed != null) return parsed
+    }
+    // Try first 10 chars if string contains datetime
+    if (s.length >= 10) {
+        val first10 = s.substring(0, 10)
+        val parsed = runCatching { java.time.LocalDate.parse(first10) }.getOrNull()
+        if (parsed != null) return parsed
+    }
+    // Try only year present
+    val yearOnly = s.takeWhile { it.isDigit() }
+    if (yearOnly.length == 4) {
+        val year = runCatching { yearOnly.toInt() }.getOrNull()
+        if (year != null && year in 1900..3000) return java.time.LocalDate.of(year, 1, 1)
+    }
+    return null
+}
 
 @Composable
 private fun PetRowCard(
@@ -249,7 +278,7 @@ private fun PetRowCard(
                 )
             } else {
                 Image(
-                    painter = painterResource(id = R.drawable.foto_stock_perrito),
+                    painter = painterResource(id = R.drawable.mascota),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

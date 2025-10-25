@@ -10,6 +10,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.Duration
 import com.google.firebase.auth.FirebaseAuth
 import com.google.android.gms.tasks.Tasks
 
@@ -241,6 +242,11 @@ object RoutinesRepository {
         val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
         if (code !in 200..299) throw RuntimeException("create routine error $code: $body")
         val obj = JSONObject(body)
+        // Compute last/next per spec from the provided input values
+        val now = LocalDateTime.now()
+        val start = LocalDateTime.parse(startOfActivity, dtf)
+        val dur = frequencyToDuration(everyNumber, everyUnit)
+        val (lastComputed, nextComputed) = computeLastAndNext(start, now, dur)
         val item = RoutineItem(
             assignment_id = obj.optString("assignment_id"),
             routine_id = obj.optString("routine_id"),
@@ -250,12 +256,44 @@ object RoutinesRepository {
             start_of_activity = obj.optString("start_of_activity", startOfActivity),
             perform_every_number = obj.optString("perform_every_number", everyNumber),
             perform_every_unit = obj.optString("perform_every_unit", everyUnit),
-            last_performed_at = obj.optString("last_performed_at"),
-            next_activity = obj.optString("next_activity", startOfActivity),
+            last_performed_at = when {
+                lastComputed == null -> ""
+                else -> dtf.format(lastComputed)
+            },
+            next_activity = dtf.format(nextComputed ?: start),
             created_at = obj.optString("created_at")
         )
         upsert(petId, item)
         return item
+    }
+
+    // Helpers: map frequency inputs to Duration, and compute last/next based on rules
+    private fun frequencyToDuration(numberStr: String, unitStr: String): Duration {
+        val n = numberStr.toLongOrNull()?.coerceAtLeast(1) ?: 1
+        val unit = unitStr.lowercase().trim()
+        return when {
+            unit in setOf("h", "hr", "hour", "hours") -> Duration.ofHours(n)
+            unit in setOf("m", "min", "minute", "minutes") -> Duration.ofMinutes(n)
+            unit in setOf("d", "day", "days") -> Duration.ofDays(n)
+            unit in setOf("w", "wk", "week", "weeks") -> Duration.ofDays(7 * n)
+            else -> Duration.ofHours(n) // default to hours
+        }
+    }
+
+    private fun computeLastAndNext(start: LocalDateTime, now: LocalDateTime, every: Duration): Pair<LocalDateTime?, LocalDateTime?> {
+        return if (!start.isAfter(now)) {
+            // Start is in the past or now: last is the user input; next is first future from adding frequency
+            var next = start
+            // guard: avoid infinite loop if duration is zero
+            if (every.isZero || every.isNegative) return start to start
+            while (!next.isAfter(now)) {
+                next = next.plusSeconds(every.seconds)
+            }
+            start to next
+        } else {
+            // Start in future: last is none, next is the start
+            null to start
+        }
     }
 
     suspend fun updateRoutine(baseUrl: String, petId: String, assignmentId: String, name: String?, startOfActivity: String?, everyNumber: String?, everyUnit: String?): RoutineItem {
