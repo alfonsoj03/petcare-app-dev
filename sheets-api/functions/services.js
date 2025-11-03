@@ -1,6 +1,7 @@
 /* eslint-disable */
 const admin = require("firebase-admin");
 const {google} = require("googleapis");
+const { logger } = require("firebase-functions");
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
@@ -9,45 +10,137 @@ async function getSheetsClient() {
   return google.sheets({version: "v4", auth});
 }
 
-async function deleteRoutineService({userId, body}) {
+async function deleteRoutineService({ userId, body }) {
   const routineId = required(body.routine_id || body.id, "routine_id");
   const spreadsheetId = ensureSpreadsheetId();
   const sheets = await getSheetsClient();
 
-  // Load sheets
+  logger.info(`deleteRoutine: iniciado para routineId=${routineId}, userId=${userId}`);
+  logger.info(`deleteRoutine: usando spreadsheetId=${spreadsheetId}`);
+
+  // 🔹 Cargar hojas
   const [routinesResp, raResp] = await Promise.all([
-    sheets.spreadsheets.values.get({ spreadsheetId, range: "routines!A1:Z10000", valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "FORMATTED_STRING" }),
-    sheets.spreadsheets.values.get({ spreadsheetId, range: "routineassignments!A1:Z10000", valueRenderOption: "UNFORMATTED_VALUE", dateTimeRenderOption: "FORMATTED_STRING" }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "routines!A1:Z500",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "routineassignments!A1:Z500",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
   ]);
+
   const rrows = routinesResp.data.values || [];
   const arows = raResp.data.values || [];
-  if (rrows.length === 0) { const e = new Error("routines sheet missing"); e.status = 500; throw e; }
-  if (arows.length === 0) { const e = new Error("routineassignments sheet missing"); e.status = 500; throw e; }
 
-  // Filter out routine row for this user
+  if (rrows.length === 0) {
+    const e = new Error("routines sheet missing");
+    e.status = 500;
+    throw e;
+  }
+  if (arows.length === 0) {
+    const e = new Error("routineassignments sheet missing");
+    e.status = 500;
+    throw e;
+  }
+
+  // 🔹 Función auxiliar para limpiar valores
+  const clean = str => String(str || "").trim();
+
+  // 🔹 Filtrar rutina
   const rHeader = rrows[0];
-  const rFiltered = [rHeader, ...rrows.slice(1).filter(cols => !(String(cols[0]) === String(routineId) && String(cols[1]) === String(userId)))];
-  // Filter out all assignments for this routine and user
+  const rFiltered = [
+    rHeader,
+    ...rrows.slice(1).filter(cols => clean(cols[0]) !== clean(routineId)),
+  ];
+
+  // 🔹 Filtrar asignaciones
   const aHeader = arows[0];
-  const aFiltered = [aHeader, ...arows.slice(1).filter(cols => !(String(cols[1]) === String(routineId) && String(cols[3]) === String(userId)))];
+  const aFiltered = [
+    aHeader,
+    ...arows.slice(1).filter(cols => clean(cols[1]) !== clean(routineId)),
+  ];
 
-  // Update sheets with filtered values
-  await sheets.spreadsheets.values.update({ spreadsheetId, range: "routines!A1", valueInputOption: "USER_ENTERED", requestBody: { values: rFiltered } });
-  await sheets.spreadsheets.values.update({ spreadsheetId, range: "routineassignments!A1", valueInputOption: "USER_ENTERED", requestBody: { values: aFiltered } });
+  // 🔹 Logs de comparación (útiles para depurar)
+  rrows.slice(1).forEach(cols => {
+    logger.info(`Comparando rutina: "${clean(cols[0])}" con "${clean(routineId)}"`);
+  });
+  arows.slice(1).forEach(cols => {
+    logger.info(`Comparando asignación: "${clean(cols[1])}" con "${clean(routineId)}"`);
+  });
 
-  // Log activity
+  const removedRoutines = rrows.length - rFiltered.length;
+  const removedAssignments = arows.length - aFiltered.length;
+
+  logger.info(
+    `deleteRoutine: encontrados ${removedRoutines} routines y ${removedAssignments} assignments para eliminar`
+  );
+
+  // 🔹 Limpiar las áreas antes de escribir (para eliminar filas residuales)
+  await Promise.all([
+    sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: "routines!A2:Z500",
+    }),
+    sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: "routineassignments!A2:Z500",
+    }),
+  ]);
+
+  logger.info("deleteRoutine: cleared old data ranges before update");
+
+  // 🔹 Preparar datos para el log de actividad
   const activityId = admin.firestore().collection("_ids").doc().id;
   const now = isoNow();
   const details = JSON.stringify({ routine_id: routineId });
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: "activitylog!A1",
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [[ activityId, userId, "DELETE_ROUTINE", "routines", routineId, now, details ]] },
-  });
 
-  return { routine_id: routineId, deleted: true, deleted_at: now };
+  // 🔹 Actualizar hojas y registrar actividad
+  const [updateRoutinesResp, updateAssignmentsResp, appendLogResp] = await Promise.all([
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "routines!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: rFiltered },
+    }),
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "routineassignments!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: aFiltered },
+    }),
+    sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "activitylog!A1",
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: [
+          [activityId, userId, "DELETE_ROUTINE", "routines", routineId, now, details],
+        ],
+      },
+    }),
+  ]);
+
+  // 🔹 Logs detallados de resultados
+  logger.info(`Update routines response: ${JSON.stringify(updateRoutinesResp.data)}`);
+  logger.info(`Update assignments response: ${JSON.stringify(updateAssignmentsResp.data)}`);
+  logger.info(`Append log response: ${JSON.stringify(appendLogResp.data)}`);
+
+  logger.info(
+    `deleteRoutine: removed ${removedRoutines} routines, ${removedAssignments} assignments for ${userId}`
+  );
+  logger.info(`deleteRoutine: rFiltered=${rFiltered.length}, aFiltered=${aFiltered.length}`);
+
+  return {
+    routine_id: routineId,
+    deleted: removedRoutines > 0 || removedAssignments > 0,
+    deleted_at: now,
+  };
 }
 
 // Upsert user into users sheet: columns: user_id, email, name, created_at, last_login
