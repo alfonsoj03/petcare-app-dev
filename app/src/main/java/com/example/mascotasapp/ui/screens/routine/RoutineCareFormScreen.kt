@@ -28,6 +28,7 @@ import java.net.URL
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
+import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -347,7 +348,10 @@ fun RoutineCareFormScreen(
                                 Text("No other pets available", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
                             }
                             else -> {
-                                ui.otherPets.forEach { pet ->
+                                val excludeId = ui.selectedPetId ?: SelectedPetStore.get()
+                                val incoming = ui.otherPets
+                                val filtered = incoming.filter { pet -> pet.pet_id != excludeId }
+                                filtered.forEach { pet ->
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Checkbox(
                                             checked = ui.alsoAddToPetIds.contains(pet.pet_id),

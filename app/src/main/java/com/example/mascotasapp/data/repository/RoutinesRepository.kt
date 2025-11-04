@@ -52,37 +52,53 @@ object RoutinesRepository {
         everyNumber: String,
         everyUnit: String
     ) {
+        val TAG = "CreateRoutineForPets"
         require(petIds.isNotEmpty())
         require(name.isNotBlank())
         require(everyNumber.isNotBlank())
         LocalDateTime.parse(startOfActivity, dtf)
-        val auth = FirebaseAuth.getInstance()
-        if (auth.currentUser == null) {
-            Tasks.await(auth.signInAnonymously())
-        }
-        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
-        val url = URL("$baseUrl/createRoutine")
-        val conn = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("X-Debug-Uid", "dev-user")
-            if (!idToken.isNullOrBlank()) {
-                setRequestProperty("Authorization", "Bearer $idToken")
+        try {
+            val auth = FirebaseAuth.getInstance()
+            if (auth.currentUser == null) {
+                Log.d(TAG, "No current user, signing in anonymously...")
+                Tasks.await(auth.signInAnonymously())
+                Log.d(TAG, "Anonymous sign-in ok uid=${auth.currentUser?.uid}")
+            } else {
+                Log.d(TAG, "Using current user uid=${auth.currentUser?.uid}")
             }
+            val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+            Log.d(TAG, "Token prefix=${idToken?.take(12)}...")
+
+            val urlStr = "$baseUrl/createRoutine"
+            Log.d(TAG, "POST $urlStr")
+            val url = URL(urlStr)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("X-Debug-Uid", "dev-user")
+                if (!idToken.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $idToken")
+                }
+            }
+            val payload = JSONObject().apply {
+                put("routine_name", name)
+                put("start_of_activity", startOfActivity)
+                put("perform_every_number", everyNumber)
+                put("perform_every_unit", everyUnit)
+                put("assign_to_pets", JSONArray(petIds.toList()))
+            }.toString()
+            Log.d(TAG, "Payload=${payload}")
+            conn.outputStream.use { it.write(payload.toByteArray()) }
+            val code = conn.responseCode
+            val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+            Log.d(TAG, "HTTP $code body=$body")
+            if (code !in 200..299) throw RuntimeException("create routine error $code: $body")
+            // We will refresh after this in the caller
+        } catch (e: Exception) {
+            Log.e(TAG, "createRoutineForPets failed", e)
+            throw e
         }
-        val payload = JSONObject().apply {
-            put("routine_name", name)
-            put("start_of_activity", startOfActivity)
-            put("perform_every_number", everyNumber)
-            put("perform_every_unit", everyUnit)
-            put("assign_to_pets", JSONArray(petIds.toList()))
-        }.toString()
-        conn.outputStream.use { it.write(payload.toByteArray()) }
-        val code = conn.responseCode
-        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-        if (code !in 200..299) throw RuntimeException("create routine error $code: $body")
-        // We will refresh after this in the caller
     }
 
     fun getCached(petId: String): List<RoutineItem> {
