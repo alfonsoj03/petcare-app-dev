@@ -263,6 +263,73 @@ async function getRoutinesByPetService({userId, petId}) {
   return out;
 }
 
+// GET medications joined with medicationassignments for a pet
+// medications columns: A medication_id, B user_id, C medication_name, D start_of_supply, E number, F unit, G dose_number, H dose_unit, I total_doses, J created_at
+// medicationassignments columns: A assignment_id, B medication_id, C pet_id, D user_id, E assigned_at, F last_given_at, G next_supply, H created_at, I is_completed
+async function getMedicationsByPetService({userId, petId}) {
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  const [medsResp, maResp] = await Promise.all([
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medications!A1:Z10000",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medicationassignments!A1:Z10000",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+  ]);
+
+  const mrows = medsResp.data.values || [];
+  const arows = maResp.data.values || [];
+  if (mrows.length <= 1) return [];
+
+  // Build medication map by id
+  const medById = new Map();
+  for (let i = 1; i < mrows.length; i++) {
+    const cols = mrows[i];
+    const doseNum = String(cols[6] || "");
+    const doseUnit = String(cols[7] || "");
+    medById.set(String(cols[0]), {
+      medication_id: String(cols[0] || ""),
+      user_id: String(cols[1] || ""),
+      medication_name: String(cols[2] || ""),
+      start_of_medication: String(cols[3] || ""), // start_of_supply -> start_of_medication
+      take_every_number: String(cols[4] || ""),   // number
+      take_every_unit: String(cols[5] || ""),     // unit
+      dose: [doseNum, doseUnit].filter(Boolean).join(" "),
+      created_at: String(cols[9] || ""),
+    });
+  }
+
+  const out = [];
+  for (let i = 1; i < arows.length; i++) {
+    const cols = arows[i];
+    const pid = String(cols[2] || "");
+    const uid = String(cols[3] || "");
+    if (pid === String(petId) && uid === String(userId)) {
+      const med = medById.get(String(cols[1]));
+      if (med && med.user_id === String(userId)) {
+        out.push({
+          assignment_id: String(cols[0] || ""),
+          pet_id: pid,
+          user_id: uid,
+          last_taken_at: String(cols[5] || ""),   // last_given_at -> last_taken_at
+          next_dose: String(cols[6] || ""),       // next_supply -> next_dose
+          ...med,
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
 async function updateRoutineService({userId, body}) {
   const routineId = required(body.routine_id || body.id, "routine_id");
   const petId = required(body.pet_id, "pet_id");
@@ -862,11 +929,34 @@ function isoNow() {
 }
 
 function addIntervalISO(baseIso, number, unit) {
-  const dt = new Date(baseIso);
-  if (Number.isNaN(dt.getTime())) throw Object.assign(new Error("Invalid start_of_activity ISO"), {status: 400});
+  // Helpers for local parsing/formatting
+  const pad = (x) => String(x).padStart(2, "0");
+  const formatLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const parseLocal = (s) => {
+    if (typeof s !== "string") return new Date(NaN);
+    const m = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (!m) return new Date(NaN);
+    const [_, yyyy, mm, dd, HH, MM] = m;
+    return new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(HH), Number(MM));
+  };
+
+  // Fecha base como local-naive
+  const dt = parseLocal(baseIso);
+  if (Number.isNaN(dt.getTime())) {
+    const err = new Error(`Invalid start_of_activity (expected YYYY-MM-DD HH:mm): ${baseIso}`);
+    err.status = 400;
+    throw err;
+  }
+
   const n = Number(number);
-  if (!Number.isFinite(n)) throw Object.assign(new Error("perform_every_number must be numeric"), {status: 400});
-  switch (String(unit || "").toLowerCase()) {
+  if (!Number.isFinite(n)) {
+    const err = new Error("perform_every_number must be numeric");
+    err.status = 400;
+    throw err;
+  }
+
+  const unitStr = String(unit || "").toLowerCase();
+  switch (unitStr) {
     case "hour":
     case "hours":
       dt.setHours(dt.getHours() + n); break;
@@ -880,10 +970,70 @@ function addIntervalISO(baseIso, number, unit) {
     case "months":
       dt.setMonth(dt.getMonth() + n); break;
     default:
-      throw Object.assign(new Error("perform_every_unit must be one of hours|days|weeks|months"), {status: 400});
+      const err2 = new Error("perform_every_unit must be one of hours|days|weeks|months");
+      err2.status = 400;
+      throw err2;
   }
-  return dt.toISOString();
+
+  const out = formatLocal(dt);
+  logger.info(`[addIntervalISO] base='${baseIso}' -> '${out}' (${unitStr} +${n})`);
+  return out;
 }
+
+function calculateNextAndLast(baseIso, n, unit, clientNowStr, clientOffsetMinutes) {
+  const pad = (x) => String(x).padStart(2, "0");
+  const formatLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const parseLocal = (s) => {
+    if (typeof s !== "string") return new Date(NaN);
+    const m = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (!m) return new Date(NaN);
+    const [_, yyyy, mm, dd, HH, MM] = m;
+    return new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(HH), Number(MM));
+  };
+
+  // Prefer client-provided 'now' in su zona local si viene del cliente
+  const now = clientNowStr ? parseLocal(String(clientNowStr)) : new Date();
+  const start = parseLocal(baseIso);
+  if (Number.isNaN(start.getTime())) {
+    throw new Error(`Invalid baseIso: ${baseIso}`);
+  }
+
+  logger.info(`[calcNext] now=${formatLocal(now)}, start=${formatLocal(start)}, unit=${unit}, n=${n}, clientOffsetMinutes=${clientOffsetMinutes}`);
+
+  // Caso 1️⃣: fecha futura
+  if (start > now) {
+    logger.info(`[calcNext] Fecha futura detectada — next=${formatLocal(start)}, last=(ninguno)`);
+    return {
+      last_performed_at: "",
+      next_activity: formatLocal(start),
+    };
+  }
+
+  // Caso 2️⃣: fecha pasada — iterar hasta llegar al futuro
+  let next = new Date(start.getTime());
+  let iterations = 0;
+
+  while (next <= now) {
+    iterations++;
+    const nextStr = addIntervalISO(formatLocal(next), n, unit); // returns local string
+    const newNext = parseLocal(nextStr);
+    const condition = newNext > now;
+    logger.info(
+      `[calcNext] Iteración ${iterations} — comparando ${formatLocal(newNext)} > ${formatLocal(now)} = ${condition}`
+    );
+
+    next = newNext;
+    if (iterations > 10000) throw new Error("Loop infinito detectado");
+  }
+
+  logger.info(`[calcNext] Resultado final — last=${formatLocal(start)}, next=${formatLocal(next)}`);
+
+  return {
+    last_performed_at: formatLocal(start),
+    next_activity: formatLocal(next),
+  };
+}
+
 
 async function performRoutineService({userId, body}) {
   const routineId = required(body.routine_id || body.id, "routine_id");
@@ -1165,7 +1315,7 @@ async function createRoutineService({userId, body}) {
   const spreadsheetId = ensureSpreadsheetId();
   const now = isoNow();
   const routineId = admin.firestore().collection("_ids").doc().id;
-  const nextActivity = addIntervalISO(startISO, n, unit);
+  const { last_performed_at, next_activity } = calculateNextAndLast(startISO, n, unit);
 
   const sheets = await getSheetsClient();
 
@@ -1193,8 +1343,8 @@ async function createRoutineService({userId, body}) {
       user_id: userId,
       pet_id: pid,
       routine_id: routineId,
-      last_performed_at: "",
-      next_activity: nextActivity,
+      last_performed_at: last_performed_at,
+      next_activity: next_activity,
       assigned_at: now,
     });
   }
@@ -1249,7 +1399,7 @@ async function createRoutineService({userId, body}) {
       perform_every_number: Number(n),
       perform_every_unit: String(unit),
       start_of_activity: String(startISO),
-      next_activity: nextActivity,
+      next_activity: next_activity,
       created_at: now,
     },
     assignments,

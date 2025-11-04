@@ -3,9 +3,49 @@ const {setGlobalOptions} = require("firebase-functions/v2");
 const {onRequest} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
-const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService, createOrUpdateUserService, deleteRoutineService} = require("./services");
+const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService, createOrUpdateUserService, deleteRoutineService, getMedicationsByPetService} = require("./services");
 
 setGlobalOptions({maxInstances: 10});
+
+// GET /medications?pet_id=XYZ — list medications for a pet (auth like getRoutines)
+// Also supports Hosting rewrites path: /pets/{petId}/medications
+exports.getMedications = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
+  try {
+    if (req.method !== "GET") {
+      return res.status(405).json({error: "Method Not Allowed"});
+    }
+    let userId;
+    const allowBypass = process.env.ALLOW_INSECURE_EMULATOR === "1";
+    if (allowBypass) {
+      userId = (req.headers["x-debug-uid"] || req.headers["X-Debug-Uid"] || "dev-user") + "";
+    } else {
+      const token = bearer(req);
+      if (!token) return res.status(401).json({error: "Missing Bearer token"});
+      let decoded;
+      try {
+        decoded = await admin.auth().verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({error: "Invalid token"});
+      }
+      userId = decoded.uid;
+    }
+
+    // petId from query or from path (for Hosting rewrite /pets/:id/medications)
+    let petId = req.query && req.query.pet_id ? String(req.query.pet_id) : "";
+    if (!petId && req.path) {
+      const m = req.path.match(/\/pets\/([^/]+)\/medications/i);
+      if (m && m[1]) petId = m[1];
+    }
+    if (!petId) return res.status(400).json({error: "pet_id is required"});
+
+    const data = await getMedicationsByPetService({userId, petId});
+    return res.status(200).json(data);
+  } catch (err) {
+    const code = err.status || 500;
+    logger.error("getMedications failed", err);
+    return res.status(code).json({error: err.message || "Internal Error"});
+  }
+});
 
 // POST /deleteRoutine — delete routine and all its assignments for the user
 exports.deleteRoutine = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
