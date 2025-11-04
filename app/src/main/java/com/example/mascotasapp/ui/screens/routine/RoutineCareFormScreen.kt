@@ -96,7 +96,6 @@ fun RoutineCareFormScreen(
             val minute = timeParts[1].toInt()
             
             when {
-                date.isAfter(today) -> "Cannot be in the future"
                 date.year < 1900 -> "Year must be ≥ 1900"
                 date.isBefore(today.minusYears(40)) -> "Unrealistic age"
                 hour !in 0..23 -> "Invalid hour"
