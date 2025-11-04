@@ -7,6 +7,11 @@ import androidx.lifecycle.ViewModel
 import java.time.Duration
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import com.example.mascotasapp.data.repository.RoutinesRepository
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class RoutineViewModel : ViewModel() {
     data class Schedule(
@@ -98,5 +103,25 @@ class RoutineViewModel : ViewModel() {
 
     fun dismissOverdueDialog() {
         uiState = UiState(overdueDialog = null)
+    }
+
+    suspend fun deleteRoutine(assignmentId: String, routineId: String, petId: String, baseUrl: String) {
+        withContext(Dispatchers.IO) {
+            // 1) Call backend and require positive confirmation
+            val deleted = RoutinesRepository.deleteRoutineRemote(baseUrl, routineId)
+            if (!deleted) {
+                throw RuntimeException("Remote delete did not confirm deletion")
+            }
+
+            // 2) After remote success, update local cache
+            if (petId.isNotBlank()) {
+                RoutinesRepository.deleteRoutine(petId, assignmentId)
+            }
+
+            // 3) Refresh to keep UI consistent
+            if (petId.isNotBlank()) {
+                runCatching { RoutinesRepository.refresh(baseUrl, petId) }
+            }
+        }
     }
 }

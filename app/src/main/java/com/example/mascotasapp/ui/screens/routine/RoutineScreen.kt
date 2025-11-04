@@ -45,7 +45,11 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarDuration
 import kotlinx.coroutines.launch
 import com.example.mascotasapp.core.ApiConfig
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +61,7 @@ fun RoutineScreen(
     onEditItem: (String) -> Unit = {},
     onEditMedication: (String) -> Unit = {}
 ) {
+    val selectedPetId by SelectedPetStore.selectedPetId.collectAsState(initial = null)
     val routineViewModel: RoutineViewModel = viewModel()
     val uiState = routineViewModel.uiState
     // Palette
@@ -73,6 +78,7 @@ fun RoutineScreen(
 
     // Confirm-delete dialog state: Pair<assignment_id, routine_id>
     var pendingDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var isDeleting by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -109,7 +115,6 @@ fun RoutineScreen(
         containerColor = bgSurface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
-        val selectedPetId by SelectedPetStore.selectedPetId.collectAsState(initial = null)
         val routinesFlow = if (selectedPetId.isNullOrBlank()) {
             MutableStateFlow(emptyList<RoutinesRepository.RoutineItem>())
         } else {
@@ -229,39 +234,50 @@ fun RoutineScreen(
             )
         }
 
-        // Confirm delete dialog
         if (pendingDelete != null) {
             val (assignmentId, routineId) = pendingDelete!!
             AlertDialog(
-                onDismissRequest = { pendingDelete = null },
+                onDismissRequest = { if (!isDeleting) pendingDelete = null },
                 title = { Text("¿Eliminar rutina?") },
                 text = { Text("Borrará esta rutina para todos los pets asociados. ¿Estás seguro?") },
                 confirmButton = {
                     TextButton(onClick = {
-                        val petId = SelectedPetStore.selectedPetId.value
-                        if (!petId.isNullOrBlank()) {
-                            // Remove from cache instantly so UI updates
-                            RoutinesRepository.deleteRoutine(petId, assignmentId)
-                            // Call backend to delete routine and all assignments for this routine_id
+                        if (!isDeleting) {
+                            isDeleting = true
                             scope.launch {
                                 try {
-                                    RoutinesRepository.deleteRoutineRemote(ApiConfig.BASE_URL, routineId)
+                                    routineViewModel.deleteRoutine(
+                                        assignmentId = assignmentId,
+                                        routineId = routineId,
+                                        petId = selectedPetId ?: "",
+                                        baseUrl = ApiConfig.BASE_URL
+                                    )
+                                    snackbarHostState.showSnackbar("Routine deleted successfully")
+                                    pendingDelete = null
                                 } catch (t: Throwable) {
                                     snackbarHostState.showSnackbar(
-                                        message = t.message ?: "Error al eliminar",
+                                        message = t.message ?: "Error al eliminar rutina",
                                         withDismissAction = true,
                                         duration = SnackbarDuration.Short
                                     )
                                 } finally {
-                                    // Ensure cache is consistent with server
-                                    try { RoutinesRepository.refresh(ApiConfig.BASE_URL, petId) } catch (_: Throwable) {}
+                                    isDeleting = false
                                 }
                             }
                         }
-                        pendingDelete = null
-                    }) { Text("Eliminar") }
+                    }, enabled = !isDeleting) {
+                        if (isDeleting) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Eliminando...")
+                            }
+                        } else {
+                            Text("Eliminar")
+                        }
+                    }
                 },
-                dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancelar") } }
+                dismissButton = { TextButton(onClick = { if (!isDeleting) pendingDelete = null }, enabled = !isDeleting) { Text("Cancelar") } }
             )
         }
     }

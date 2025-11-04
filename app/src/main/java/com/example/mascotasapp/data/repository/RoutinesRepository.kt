@@ -1,5 +1,6 @@
 package com.example.mascotasapp.data.repository
 
+import android.util.Log
 import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -137,27 +138,75 @@ object RoutinesRepository {
         saveCache(petId, JSONArray(filtered.map { toJson(it) }).toString())
     }
 
-    suspend fun deleteRoutineRemote(baseUrl: String, routineId: String) {
+    suspend fun deleteRoutineRemote(baseUrl: String, routineId: String): Boolean {
+        val TAG = "DeleteRoutineRemote"
+        Log.d(TAG, "Iniciando eliminación remota para rutina ID=$routineId")
+
         val auth = FirebaseAuth.getInstance()
         if (auth.currentUser == null) {
-            Tasks.await(auth.signInAnonymously())
+            Log.d(TAG, "No hay usuario autenticado, iniciando sesión anónima...")
+            try {
+                Tasks.await(auth.signInAnonymously())
+                Log.d(TAG, "Sesión anónima iniciada correctamente: ${auth.currentUser?.uid}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al iniciar sesión anónima", e)
+                throw e
+            }
+        } else {
+            Log.d(TAG, "Usuario actual: ${auth.currentUser?.uid}")
         }
-        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
-        val url = URL("$baseUrl/deleteRoutine")
+
+        val idToken = try {
+            Tasks.await(auth.currentUser!!.getIdToken(true)).token
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al obtener ID token", e)
+            throw e
+        }
+
+        Log.d(TAG, "Token obtenido: ${idToken?.take(20)}...") // mostrar solo los primeros caracteres
+
+        val urlString = "$baseUrl/deleteRoutine"
+        Log.d(TAG, "Llamando endpoint: $urlString")
+
+        val url = URL(urlString)
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("X-Debug-Uid", "dev-user")
             if (!idToken.isNullOrBlank()) {
                 setRequestProperty("Authorization", "Bearer $idToken")
             }
         }
+
         val payload = JSONObject().apply { put("routine_id", routineId) }.toString()
-        conn.outputStream.use { it.write(payload.toByteArray()) }
+        Log.d(TAG, "Payload JSON: $payload")
+
+        try {
+            conn.outputStream.use { it.write(payload.toByteArray()) }
+            Log.d(TAG, "Payload enviado correctamente")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al enviar payload", e)
+            throw e
+        }
+
         val code = conn.responseCode
-        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-        if (code !in 200..299) throw RuntimeException("delete routine error $code: $body")
+        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+            ?.bufferedReader()
+            ?.use { it.readText() }
+            ?: ""
+
+        Log.d(TAG, "Código de respuesta: $code")
+        Log.d(TAG, "Cuerpo de respuesta: $body")
+
+        if (code !in 200..299) {
+            Log.e(TAG, "Error al eliminar rutina: código=$code body=$body")
+            throw RuntimeException("delete routine error $code: $body")
+        }
+
+        // Parse JSON and check 'deleted' flag if present
+        val deleted = runCatching { JSONObject(body).optBoolean("deleted", true) }.getOrDefault(true)
+        Log.d(TAG, "Flag 'deleted' desde backend: $deleted")
+        return deleted
     }
 
     private fun saveCache(petId: String, json: String) {
