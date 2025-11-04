@@ -20,35 +20,27 @@ class App : Application() {
         MedicationsRepository.init(this)
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { PetsRepository.refresh(ApiConfig.BASE_URL) }
-            // After pets refresh, if we already have a selected pet, refresh routines
-            val petId = SelectedPetStore.get()
-            if (!petId.isNullOrBlank()) {
-                // cache-first for routines
-                val cachedRoutines = RoutinesRepository.getCached(petId)
-                if (cachedRoutines.isEmpty()) {
-                    runCatching { RoutinesRepository.refresh(ApiConfig.BASE_URL, petId) }
-                }
-                // cache-first for medications
-                val cachedMeds = MedicationsRepository.getCached(petId)
-                if (cachedMeds.isEmpty()) {
-                    runCatching { MedicationsRepository.refresh(ApiConfig.BASE_URL, petId) }
+            // After pets refresh, if we already have a selected pet, refresh routines and medications
+            var petId = SelectedPetStore.get()
+            if (petId.isNullOrBlank()) {
+                val first = PetsRepository.pets.value.firstOrNull()?.pet_id
+                if (!first.isNullOrBlank()) {
+                    SelectedPetStore.set(first)
+                    petId = first
                 }
             }
+            if (!petId.isNullOrBlank()) {
+                // Always refresh to keep data in sync with Sheets
+                runCatching { RoutinesRepository.refresh(ApiConfig.BASE_URL, petId!!) }
+                runCatching { MedicationsRepository.refresh(ApiConfig.BASE_URL, petId!!) }
+            }
         }
-        // Observe selected pet changes to refresh routines
+        // Observe selected pet changes to refresh routines and medications
         CoroutineScope(Dispatchers.IO).launch {
             SelectedPetStore.selectedPetId.collectLatest { id ->
                 if (!id.isNullOrBlank()) {
-                    // cache-first routines
-                    val cachedRoutines = RoutinesRepository.getCached(id)
-                    if (cachedRoutines.isEmpty()) {
-                        runCatching { RoutinesRepository.refresh(ApiConfig.BASE_URL, id) }
-                    }
-                    // cache-first medications
-                    val cachedMeds = MedicationsRepository.getCached(id)
-                    if (cachedMeds.isEmpty()) {
-                        runCatching { MedicationsRepository.refresh(ApiConfig.BASE_URL, id) }
-                    }
+                    runCatching { RoutinesRepository.refresh(ApiConfig.BASE_URL, id) }
+                    runCatching { MedicationsRepository.refresh(ApiConfig.BASE_URL, id) }
                 }
             }
         }
