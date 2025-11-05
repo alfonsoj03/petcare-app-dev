@@ -18,6 +18,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import com.example.mascotasapp.ui.components.LabeledField
+import com.example.mascotasapp.core.ApiConfig
+import com.example.mascotasapp.core.SelectedPetStore
+import com.example.mascotasapp.data.repository.MedicationsRepository
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +48,7 @@ fun MedicationFormScreen(
 ) {
     val bgSurface = Color(0xFFF9FAFB)
     val purple = Color(0xFF8B5CF6)
+    val context = LocalContext.current
 
     var medName by remember { mutableStateOf(initialName) }
     var dateTime by remember { mutableStateOf(initialDateTime) }
@@ -142,7 +152,32 @@ fun MedicationFormScreen(
         )
     }
 
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val vm: MedicationFormViewModel = viewModel()
+    val ui by vm.uiState.collectAsState()
+    LaunchedEffect(formValid) { vm.updateFormValidity(formValid) }
+
+    LaunchedEffect(ui.snackbarMessage) {
+        val msg = ui.snackbarMessage
+        if (msg != null) {
+            snackbarHostState.showSnackbar(message = msg, withDismissAction = true, duration = SnackbarDuration.Short)
+            vm.consumeSnackbar()
+        }
+    }
+
+    LaunchedEffect(ui.navigationEvent) {
+        when (ui.navigationEvent) {
+            is MedicationFormViewModel.NavigationEvent.NavigateBack -> {
+                vm.consumeNavigation()
+                onBack()
+            }
+            null -> Unit
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(title, style = MaterialTheme.typography.titleLarge) },
@@ -183,6 +218,16 @@ fun MedicationFormScreen(
                                 doseUnitError = validateDoseUnit(doseUnit)
                                 totalDosesError = validateTotalDoses(totalDoses)
                                 if (listOf(nameError, dateTimeError, everyValueError, everyUnitError, doseValueError, doseUnitError, totalDosesError).all { it == null }) {
+                                    vm.onSubmit(
+                                        context = context,
+                                        name = medName,
+                                        startOfSupply = dateTime,
+                                        everyNumber = everyValue,
+                                        everyUnit = everyUnit,
+                                        doseNumber = doseValue,
+                                        doseUnit = doseUnit,
+                                        totalDoses = totalDoses.toInt()
+                                    )
                                     onConfirm(medName)
                                     onConfirmWithTotal(medName, totalDoses.toInt())
                                 }
@@ -196,9 +241,17 @@ fun MedicationFormScreen(
                                 contentColor = Color.White,
                                 disabledContainerColor = Color(0xFFDDD6FE)
                             ),
-                            enabled = formValid
+                            enabled = formValid && !ui.isSubmitting
                         ) {
-                            Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                            if (ui.isSubmitting) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White
+                                )
+                            } else {
+                                Text(confirmButtonText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                            }
                         }
                     }
                 }

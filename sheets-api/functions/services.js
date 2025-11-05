@@ -10,6 +10,73 @@ async function getSheetsClient() {
   return google.sheets({version: "v4", auth});
 }
 
+async function getMedicationsByPetService({userId, petId}) {
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  const [medsResp, maResp] = await Promise.all([
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medications!A1:Z10000",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medicationassignments!A1:Z10000",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+  ]);
+
+  const mrows = medsResp.data.values || [];
+  const arows = maResp.data.values || [];
+  if (mrows.length <= 1) return [];
+
+  // medications columns: A medication_id, B user_id, C medication_name, D start_of_supply, E perform_every_number, F perform_every_unit, G dose_number, H dose_unit, I total_doses, J created_at
+  const medById = new Map();
+  for (let i = 1; i < mrows.length; i++) {
+    const cols = mrows[i];
+    const id = String(cols[0] || "");
+    medById.set(id, {
+      medication_id: id,
+      user_id: String(cols[1] || ""),
+      medication_name: String(cols[2] || ""),
+      start_of_medication: String(cols[3] || ""), // map start_of_supply -> start_of_medication (app expects this name)
+      take_every_number: String(cols[4] || ""),   // map perform_every_number -> take_every_number
+      take_every_unit: String(cols[5] || ""),     // map perform_every_unit -> take_every_unit
+      dose_number: String(cols[6] || ""),
+      dose_unit: String(cols[7] || ""),
+      total_doses: String(cols[8] || ""),
+      created_at: String(cols[9] || ""),
+    });
+  }
+
+  // medicationassignments columns: A assignment_id, B medication_id, C pet_id, D user_id, E assigned_at, F last_given_at, G next_supply, H created_at, I is_completed
+  const out = [];
+  for (let i = 1; i < arows.length; i++) {
+    const cols = arows[i];
+    if (String(cols[2]) === String(petId) && String(cols[3]) === String(userId)) {
+      const medicationId = String(cols[1] || "");
+      const med = medById.get(medicationId);
+      if (med && med.user_id === String(userId)) {
+        const doseCombined = (med.dose_number ? String(med.dose_number) : "") + (med.dose_unit ? ` ${med.dose_unit}` : "");
+        out.push({
+          assignment_id: String(cols[0] || ""),
+          pet_id: String(cols[2] || ""),
+          user_id: String(cols[3] || ""),
+          last_taken_at: String(cols[5] || ""),      // map last_given_at -> last_taken_at
+          next_dose: String(cols[6] || ""),          // map next_supply -> next_dose
+          dose: doseCombined,
+          ...med,
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
 async function deleteMedicationService({ userId, body }) {
   const medicationId = required(body.medication_id || body.id, "medication_id");
   const spreadsheetId = ensureSpreadsheetId();
@@ -1494,10 +1561,75 @@ async function createRoutineService({userId, body}) {
   };
 }
 
+async function deleteMedicationService({ userId, body }) {
+  const medicationId = required(body.medication_id || body.id, "medication_id");
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+  // Load medications and assignments
+  const [mResp, aResp] = await Promise.all([
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medications!A1:Z500",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medicationassignments!A1:Z500",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+  ]);
+  const mrows = mResp.data.values || [];
+  const arows = aResp.data.values || [];
+  if (mrows.length === 0) { const e = new Error("medications sheet missing"); e.status = 500; throw e; }
+  if (arows.length === 0) { const e = new Error("medicationassignments sheet missing"); e.status = 500; throw e; }
+
+  const clean = (s) => String(s || "").trim();
+  const mHeader = mrows[0];
+  const aHeader = arows[0];
+  const mFiltered = [mHeader, ...mrows.slice(1).filter(cols => clean(cols[0]) !== clean(medicationId))];
+  const aFiltered = [aHeader, ...arows.slice(1).filter(cols => clean(cols[1]) !== clean(medicationId))];
+
+  await Promise.all([
+    sheets.spreadsheets.values.clear({ spreadsheetId, range: "medications!A2:Z500" }),
+    sheets.spreadsheets.values.clear({ spreadsheetId, range: "medicationassignments!A2:Z500" }),
+  ]);
+
+  const activityId = admin.firestore().collection("_ids").doc().id;
+  const now = isoNow();
+  const details = JSON.stringify({ medication_id: medicationId });
+
+  const [updateMedsResp, updateAssignResp, appendLogResp] = await Promise.all([
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "medications!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: mFiltered },
+    }),
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "medicationassignments!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: aFiltered },
+    }),
+    sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "activitylog!A1",
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: [[activityId, userId, "DELETE_MEDICATION", "medications", medicationId, now, details]] },
+    }),
+  ]);
+
+  return { medication_id: medicationId, deleted: (mrows.length - mFiltered.length) > 0 || (arows.length - aFiltered.length) > 0, deleted_at: now };
+}
+
 module.exports = {
   getPetsService,
   createPetService,
   getRoutinesByPetService,
+  getMedicationsByPetService,
   updateRoutineService,
   createRoutineService,
   createMedicationService,

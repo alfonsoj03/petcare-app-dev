@@ -27,6 +27,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.example.mascotasapp.data.repository.RoutinesRepository
+import com.example.mascotasapp.data.repository.MedicationsRepository
 import com.example.mascotasapp.core.SelectedPetStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.Instant
@@ -38,6 +39,7 @@ import java.util.Locale
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 import com.example.mascotasapp.ui.screens.routine.RoutineViewModel
+import com.example.mascotasapp.ui.screens.routine.MedicationViewModel
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.SnackbarHost
@@ -63,6 +65,7 @@ fun RoutineScreen(
 ) {
     val selectedPetId by SelectedPetStore.selectedPetId.collectAsState(initial = null)
     val routineViewModel: RoutineViewModel = viewModel()
+    val medicationViewModel: MedicationViewModel = viewModel()
     val uiState = routineViewModel.uiState
     // Palette
     val bgSurface = Color(0xFFF9FAFB)
@@ -122,6 +125,20 @@ fun RoutineScreen(
         }
         val routines by routinesFlow.collectAsState(initial = emptyList())
 
+        val medsFlow = if (selectedPetId.isNullOrBlank()) {
+            MutableStateFlow(emptyList<MedicationsRepository.MedicationItem>())
+        } else {
+            MedicationsRepository.medsFlow(selectedPetId!!)
+        }
+        val medications by medsFlow.collectAsState(initial = emptyList())
+
+        LaunchedEffect(selectedPetId) {
+            val pid = selectedPetId
+            if (!pid.isNullOrBlank()) {
+                runCatching { MedicationsRepository.refresh(ApiConfig.BASE_URL, pid) }
+            }
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -177,39 +194,77 @@ fun RoutineScreen(
                     )
                 }
             }
-            item {
-                var visible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
-                if (visible) {
+            if (medications.isNotEmpty()) {
+                items(medications, key = { it.assignment_id }) { m ->
+                    val startPretty = formatDateTimePretty(m.start_of_medication)
+                    val nextPretty = formatDateTimePretty(m.next_dose)
+                    val freq = when {
+                        m.take_every_number.isBlank() || m.take_every_unit.isBlank() -> ""
+                        else -> " - Every ${m.take_every_number} ${m.take_every_unit}"
+                    }
+                    val doseText = (m.dose.ifBlank { "" }) + freq
+                    // Compute End Date as start + (total_doses-1)*interval
+                    val endPretty = run {
+                        try {
+                            val dtf = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                            val start = java.time.LocalDateTime.parse(m.start_of_medication, dtf)
+                            val n = m.take_every_number.toLongOrNull() ?: 0L
+                            val total = m.total_doses.toLongOrNull() ?: 0L
+                            val dur = when (m.take_every_unit.lowercase()) {
+                                "hour", "hours" -> java.time.Duration.ofHours(n)
+                                "day", "days" -> java.time.Duration.ofDays(n)
+                                "week", "weeks" -> java.time.Duration.ofDays(7 * n)
+                                "month", "months" -> java.time.Duration.ofDays(30 * n)
+                                else -> java.time.Duration.ofHours(n)
+                            }
+                            val end = if (n > 0 && total > 1) start.plusSeconds(dur.seconds * (total - 1)) else start
+                            formatDateTimePretty(dtf.format(end))
+                        } catch (t: Throwable) { "" }
+                    }
                     MedicationCard(
-                        name = "Heartgard Plus",
-                        dose = "68mg - Monthly",
-                        reminder = "Reminder On",
-                        start = "Oct 1, 2024",
-                        end = "Oct 1, 2025",
-                        nextDose = "Dec 1, 2024",
+                        name = m.medication_name.ifBlank { "Medication" },
+                        dose = doseText.trim(),
+                        reminder = "",
+                        start = startPretty,
+                        end = endPretty,
+                        nextDose = nextPretty,
                         onMarkDone = {
-                            routineViewModel.onMarkDone("heartgard_plus")
-                            onMarkDone("heartgard_plus")
+                            val pid = selectedPetId
+                            if (!pid.isNullOrBlank()) {
+                                scope.launch {
+                                    try {
+                                        MedicationsRepository.performMedication(
+                                            baseUrl = ApiConfig.BASE_URL,
+                                            medicationId = m.medication_id,
+                                            petId = pid,
+                                            givenAtIso = java.time.Instant.now().toString()
+                                        )
+                                        snackbarHostState.showSnackbar("Marked as done")
+                                        runCatching { MedicationsRepository.refresh(ApiConfig.BASE_URL, pid) }
+                                    } catch (t: Throwable) {
+                                        snackbarHostState.showSnackbar(t.message ?: "Error")
+                                    }
+                                }
+                            }
                         },
-                        onDelete = { visible = false }
-                    )
-                }
-            }
-            item {
-                var visible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
-                if (visible) {
-                    MedicationCard(
-                        name = "Apoquel",
-                        dose = "16mg - Twice daily",
-                        reminder = "Reminder Off",
-                        start = "Nov 15, 2024",
-                        end = "Dec 15, 2024",
-                        nextDose = "Today, 6:00 PM",
-                        onMarkDone = {
-                            routineViewModel.onMarkDone("apoquel")
-                            onMarkDone("apoquel")
-                        },
-                        onDelete = { visible = false }
+                        onDelete = {
+                            val pid = selectedPetId
+                            if (!pid.isNullOrBlank()) {
+                                scope.launch {
+                                    try {
+                                        medicationViewModel.deleteMedication(
+                                            assignmentId = m.assignment_id,
+                                            medicationId = m.medication_id,
+                                            petId = pid,
+                                            baseUrl = ApiConfig.BASE_URL
+                                        )
+                                        snackbarHostState.showSnackbar("Medication deleted")
+                                    } catch (t: Throwable) {
+                                        snackbarHostState.showSnackbar(t.message ?: "Error")
+                                    }
+                                }
+                            }
+                        }
                     )
                 }
             }
