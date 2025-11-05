@@ -10,6 +10,94 @@ async function getSheetsClient() {
   return google.sheets({version: "v4", auth});
 }
 
+async function deleteMedicationService({ userId, body }) {
+  const medicationId = required(body.medication_id || body.id, "medication_id");
+  const spreadsheetId = ensureSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  logger.info(`deleteMedication: iniciado para medicationId=${medicationId}, userId=${userId}`);
+  logger.info(`deleteMedication: usando spreadsheetId=${spreadsheetId}`);
+
+  // Cargar hojas
+  const [medsResp, maResp] = await Promise.all([
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medications!A1:Z500",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "medicationassignments!A1:Z500",
+      valueRenderOption: "UNFORMATTED_VALUE",
+      dateTimeRenderOption: "FORMATTED_STRING",
+    }),
+  ]);
+
+  const mrows = medsResp.data.values || [];
+  const arows = maResp.data.values || [];
+  if (mrows.length === 0) { const e = new Error("medications sheet missing"); e.status = 500; throw e; }
+  if (arows.length === 0) { const e = new Error("medicationassignments sheet missing"); e.status = 500; throw e; }
+
+  const clean = (str) => String(str || "").trim();
+
+  // Filtrar medicamento
+  const mHeader = mrows[0];
+  const mFiltered = [mHeader, ...mrows.slice(1).filter(cols => clean(cols[0]) !== clean(medicationId))];
+
+  // Filtrar asignaciones (col B medication_id)
+  const aHeader = arows[0];
+  const aFiltered = [aHeader, ...arows.slice(1).filter(cols => clean(cols[1]) !== clean(medicationId))];
+
+  // Logs de comparación
+  mrows.slice(1).forEach(cols => logger.info(`Comparando medication: "${clean(cols[0])}" con "${clean(medicationId)}"`));
+  arows.slice(1).forEach(cols => logger.info(`Comparando med assignment: "${clean(cols[1])}" con "${clean(medicationId)}"`));
+
+  const removedMeds = mrows.length - mFiltered.length;
+  const removedAssignments = arows.length - aFiltered.length;
+  logger.info(`deleteMedication: encontrados ${removedMeds} medications y ${removedAssignments} assignments para eliminar`);
+
+  // Limpiar áreas y escribir
+  await Promise.all([
+    sheets.spreadsheets.values.clear({ spreadsheetId, range: "medications!A2:Z500" }),
+    sheets.spreadsheets.values.clear({ spreadsheetId, range: "medicationassignments!A2:Z500" }),
+  ]);
+
+  logger.info("deleteMedication: cleared old data ranges before update");
+
+  const activityId = admin.firestore().collection("_ids").doc().id;
+  const now = isoNow();
+  const details = JSON.stringify({ medication_id: medicationId });
+
+  const [updateMedsResp, updateAssignmentsResp, appendLogResp] = await Promise.all([
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "medications!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: mFiltered },
+    }),
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "medicationassignments!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: aFiltered },
+    }),
+    sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "activitylog!A1",
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: [[activityId, userId, "DELETE_MEDICATION", "medications", medicationId, now, details]] },
+    }),
+  ]);
+
+  logger.info(`Update meds response: ${JSON.stringify(updateMedsResp.data)}`);
+  logger.info(`Update med-assignments response: ${JSON.stringify(updateAssignmentsResp.data)}`);
+  logger.info(`Append log response: ${JSON.stringify(appendLogResp.data)}`);
+
+  return { medication_id: medicationId, deleted: removedMeds > 0 || removedAssignments > 0, deleted_at: now };
+}
+
 async function deleteRoutineService({ userId, body }) {
   const routineId = required(body.routine_id || body.id, "routine_id");
   const spreadsheetId = ensureSpreadsheetId();
@@ -1419,6 +1507,7 @@ module.exports = {
   getPetNextEventsService,
   createOrUpdateUserService,
   deleteRoutineService,
+  deleteMedicationService,
 };
 
 async function createVisitService({userId, body}) {

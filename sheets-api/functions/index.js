@@ -3,9 +3,36 @@ const {setGlobalOptions} = require("firebase-functions/v2");
 const {onRequest} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
-const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService, createOrUpdateUserService, deleteRoutineService, getMedicationsByPetService} = require("./services");
+const {getPetsService, createPetService, updatePetService, createRoutineService, createMedicationService, createVisitService, performRoutineService, performMedicationService, getPetNextEventsService, getRoutinesByPetService, updateRoutineService, createOrUpdateUserService, deleteRoutineService, getMedicationsByPetService, deleteMedicationService} = require("./services");
 
 setGlobalOptions({maxInstances: 10});
+
+// POST /deleteMedication — delete medication and all its assignments for the user
+exports.deleteMedication = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      return res.status(405).json({error: "Method Not Allowed"});
+    }
+    // Auth
+    let userId;
+    const allowBypass = process.env.ALLOW_INSECURE_EMULATOR === "1";
+    if (allowBypass) {
+      userId = (req.headers["x-debug-uid"] || req.headers["X-Debug-Uid"] || "dev-user") + "";
+    } else {
+      const token = bearer(req);
+      if (!token) return res.status(401).json({error: "Missing Bearer token"});
+      const decoded = await admin.auth().verifyIdToken(token);
+      userId = decoded.uid;
+    }
+
+    const result = await deleteMedicationService({userId, body: req.body || {}});
+    return res.status(200).json(result);
+  } catch (err) {
+    const code = err.status || 500;
+    logger.error("deleteMedication failed", err);
+    return res.status(code).json({error: err.message || "Internal Error"});
+  }
+});
 
 // GET /medications?pet_id=XYZ — list medications for a pet (auth like getRoutines)
 // Also supports Hosting rewrites path: /pets/{petId}/medications
