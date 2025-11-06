@@ -20,6 +20,7 @@ import java.time.LocalDate
 import com.example.mascotasapp.ui.components.LabeledField
 import com.example.mascotasapp.core.ApiConfig
 import com.example.mascotasapp.core.SelectedPetStore
+import com.example.mascotasapp.data.repository.PetsRepository
 import com.example.mascotasapp.data.repository.MedicationsRepository
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,15 @@ fun MedicationFormScreen(
 
     var alsoBuddy by remember { mutableStateOf(initialAlsoBuddy) }
     var alsoLuna by remember { mutableStateOf(initialAlsoLuna) }
+
+    // Dynamic pets list from repository
+    LaunchedEffect(Unit) {
+        SelectedPetStore.init(context)
+        PetsRepository.init(context)
+    }
+    val selectedPetId by SelectedPetStore.selectedPetId.collectAsState(initial = SelectedPetStore.get())
+    val pets by PetsRepository.pets.collectAsState()
+    val additionalSelected = remember { mutableStateOf<MutableSet<String>>(mutableSetOf()) }
 
     // Validators
     fun validateName(v: String): String? {
@@ -226,7 +236,8 @@ fun MedicationFormScreen(
                                         everyUnit = everyUnit,
                                         doseNumber = doseValue,
                                         doseUnit = doseUnit,
-                                        totalDoses = totalDoses.toInt()
+                                        totalDoses = totalDoses.toInt(),
+                                        additionalPetIds = additionalSelected.value
                                     )
                                     onConfirm(medName)
                                     onConfirmWithTotal(medName, totalDoses.toInt())
@@ -429,29 +440,29 @@ fun MedicationFormScreen(
             item { Text("Also add to", style = MaterialTheme.typography.titleSmall) }
             item {
                 Column(Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = alsoBuddy,
-                            onCheckedChange = { alsoBuddy = it },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = purple,
-                                uncheckedColor = Color(0xFF9CA3AF),
-                                checkmarkColor = Color.White
+                    val others = pets.filter { it.pet_id != (selectedPetId ?: "") }
+                    others.forEach { pet ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val checked = pet.pet_id in additionalSelected.value
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = { isChecked ->
+                                    if (isChecked) additionalSelected.value.add(pet.pet_id)
+                                    else additionalSelected.value.remove(pet.pet_id)
+                                    // trigger recomposition
+                                    additionalSelected.value = additionalSelected.value.toMutableSet()
+                                },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = purple,
+                                    uncheckedColor = Color(0xFF9CA3AF),
+                                    checkmarkColor = Color.White
+                                )
                             )
-                        )
-                        Text("Buddy")
+                            Text(pet.name)
+                        }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = alsoLuna,
-                            onCheckedChange = { alsoLuna = it },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = purple,
-                                uncheckedColor = Color(0xFF9CA3AF),
-                                checkmarkColor = Color.White
-                            )
-                        )
-                        Text("Luna")
+                    if (others.isEmpty()) {
+                        Text("No other pets available", color = Color(0xFF6B7280), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

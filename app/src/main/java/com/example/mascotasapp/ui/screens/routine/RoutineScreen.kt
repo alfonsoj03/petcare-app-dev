@@ -36,10 +36,6 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import androidx.lifecycle.viewmodel.compose.viewModel
-
-import com.example.mascotasapp.ui.screens.routine.RoutineViewModel
-import com.example.mascotasapp.ui.screens.routine.MedicationViewModel
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.SnackbarHost
@@ -82,6 +78,8 @@ fun RoutineScreen(
     // Confirm-delete dialog state: Pair<assignment_id, routine_id>
     var pendingDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
     var isDeleting by remember { mutableStateOf(false) }
+    var pendingMedDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var isDeletingMed by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -247,24 +245,7 @@ fun RoutineScreen(
                                 }
                             }
                         },
-                        onDelete = {
-                            val pid = selectedPetId
-                            if (!pid.isNullOrBlank()) {
-                                scope.launch {
-                                    try {
-                                        medicationViewModel.deleteMedication(
-                                            assignmentId = m.assignment_id,
-                                            medicationId = m.medication_id,
-                                            petId = pid,
-                                            baseUrl = ApiConfig.BASE_URL
-                                        )
-                                        snackbarHostState.showSnackbar("Medication deleted")
-                                    } catch (t: Throwable) {
-                                        snackbarHostState.showSnackbar(t.message ?: "Error")
-                                    }
-                                }
-                            }
-                        }
+                        onDelete = { pendingMedDelete = m.assignment_id to m.medication_id }
                     )
                 }
             }
@@ -288,53 +269,103 @@ fun RoutineScreen(
                 }
             )
         }
+    }
 
-        if (pendingDelete != null) {
-            val (assignmentId, routineId) = pendingDelete!!
-            AlertDialog(
-                onDismissRequest = { if (!isDeleting) pendingDelete = null },
-                title = { Text("¿Eliminar rutina?") },
-                text = { Text("Borrará esta rutina para todos los pets asociados. ¿Estás seguro?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        if (!isDeleting) {
-                            isDeleting = true
-                            scope.launch {
-                                try {
-                                    routineViewModel.deleteRoutine(
-                                        assignmentId = assignmentId,
-                                        routineId = routineId,
-                                        petId = selectedPetId ?: "",
-                                        baseUrl = ApiConfig.BASE_URL
-                                    )
-                                    snackbarHostState.showSnackbar("Routine deleted successfully")
-                                    pendingDelete = null
-                                } catch (t: Throwable) {
-                                    snackbarHostState.showSnackbar(
-                                        message = t.message ?: "Error al eliminar rutina",
-                                        withDismissAction = true,
-                                        duration = SnackbarDuration.Short
-                                    )
-                                } finally {
-                                    isDeleting = false
-                                }
+    if (pendingDelete != null) {
+        val (assignmentId, routineId) = pendingDelete!!
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting) pendingDelete = null },
+            title = { Text("¿Eliminar rutina?") },
+            text = { Text("Borrará esta rutina para todos los pets asociados. ¿Estás seguro?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (!isDeleting) {
+                        isDeleting = true
+                        scope.launch {
+                            try {
+                                routineViewModel.deleteRoutine(
+                                    assignmentId = assignmentId,
+                                    routineId = routineId,
+                                    petId = selectedPetId ?: "",
+                                    baseUrl = ApiConfig.BASE_URL
+                                )
+                                snackbarHostState.showSnackbar("Routine deleted successfully")
+                                pendingDelete = null
+                            } catch (t: Throwable) {
+                                snackbarHostState.showSnackbar(
+                                    message = t.message ?: "Error al eliminar rutina",
+                                    withDismissAction = true,
+                                    duration = SnackbarDuration.Short
+                                )
+                            } finally {
+                                isDeleting = false
                             }
-                        }
-                    }, enabled = !isDeleting) {
-                        if (isDeleting) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Eliminando...")
-                            }
-                        } else {
-                            Text("Eliminar")
                         }
                     }
-                },
-                dismissButton = { TextButton(onClick = { if (!isDeleting) pendingDelete = null }, enabled = !isDeleting) { Text("Cancelar") } }
-            )
-        }
+                }, enabled = !isDeleting) {
+                    if (isDeleting) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Eliminando...")
+                        }
+                    } else {
+                        Text("Eliminar")
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = { if (!isDeleting) pendingDelete = null }, enabled = !isDeleting) { Text("Cancelar") } }
+        )
+    }
+
+    if (pendingMedDelete != null) {
+        val (assignmentId, medicationId) = pendingMedDelete!!
+        AlertDialog(
+            onDismissRequest = { if (!isDeletingMed) pendingMedDelete = null },
+            title = { Text("¿Eliminar medicamento?") },
+            text = { Text("Se eliminará este medicamento y sus asignaciones. ¿Estás seguro?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (!isDeletingMed) {
+                        isDeletingMed = true
+                        scope.launch {
+                            try {
+                                val pid = selectedPetId ?: ""
+                                if (pid.isNotBlank()) {
+                                    medicationViewModel.deleteMedication(
+                                        assignmentId = assignmentId,
+                                        medicationId = medicationId,
+                                        petId = pid,
+                                        baseUrl = ApiConfig.BASE_URL
+                                    )
+                                    snackbarHostState.showSnackbar("Medication deleted")
+                                    pendingMedDelete = null
+                                }
+                            } catch (t: Throwable) {
+                                snackbarHostState.showSnackbar(
+                                    message = t.message ?: "Error al eliminar medicamento",
+                                    withDismissAction = true,
+                                    duration = SnackbarDuration.Short
+                                )
+                            } finally {
+                                isDeletingMed = false
+                            }
+                        }
+                    }
+                }, enabled = !isDeletingMed) {
+                    if (isDeletingMed) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Eliminando...")
+                        }
+                    } else {
+                        Text("Eliminar")
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = { if (!isDeletingMed) pendingMedDelete = null }, enabled = !isDeletingMed) { Text("Cancelar") } }
+        )
     }
 }
 
