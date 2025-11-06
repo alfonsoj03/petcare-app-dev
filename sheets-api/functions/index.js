@@ -101,6 +101,39 @@ exports.deleteRoutine = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, asy
   }
 });
 
+// POST /deleteMedication — delete medication and all its assignments for the user
+exports.deleteMedication = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      return res.status(405).json({error: "Method Not Allowed"});
+    }
+    // Auth
+    let userId;
+    const allowBypass = process.env.ALLOW_INSECURE_EMULATOR === "1";
+    if (allowBypass) {
+      userId = (req.headers["x-debug-uid"] || req.headers["X-Debug-Uid"] || "dev-user") + "";
+    } else {
+      const token = bearer(req);
+      if (!token) return res.status(401).json({error: "Missing Bearer token"});
+      let decoded;
+      try {
+        decoded = await admin.auth().verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({error: "Invalid token"});
+      }
+      userId = decoded.uid;
+    }
+
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const result = await deleteMedicationService({userId, body});
+    return res.status(200).json(result);
+  } catch (err) {
+    const code = err.status || 500;
+    logger.error("deleteMedication failed", err);
+    return res.status(code).json({error: err.message || "Internal Error"});
+  }
+});
+
 // GET /diagnostics — returns current config info (for debugging)
 exports.diagnostics = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
