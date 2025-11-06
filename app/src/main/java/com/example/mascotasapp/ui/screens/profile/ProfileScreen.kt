@@ -25,10 +25,11 @@ import com.example.mascotasapp.R
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import com.google.firebase.auth.FirebaseAuth
+import com.example.mascotasapp.core.SelectedPetStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(onBack: () -> Unit = {}) {
+fun ProfileScreen(onBack: () -> Unit = {}, onSignOut: () -> Unit = {}) {
     val bgSurface = Color(0xFFF9FAFB)
     val accent = Color(0xFF8B5CF6)
     val green = Color(0xFF10B981)
@@ -128,7 +129,11 @@ fun ProfileScreen(onBack: () -> Unit = {}) {
 
             // Sign out
             OutlinedButton(
-                onClick = { /* sign out */ },
+                onClick = {
+                    FirebaseAuth.getInstance().signOut()
+                    SelectedPetStore.clear()
+                    onSignOut()
+                },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
                 border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp, brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFE5E7EB)))

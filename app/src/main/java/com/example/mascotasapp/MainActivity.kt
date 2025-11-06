@@ -222,6 +222,17 @@ fun AppRoot() {
                     addPetIconResId = R.drawable.cat_ndog
                 )
             }
+            composable(Destinations.Profile.route) {
+                ProfileScreen(
+                    onBack = { navController.navigateUp() },
+                    onSignOut = {
+                        navController.navigate(Destinations.Login.route) {
+                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
             composable(Destinations.Health.route) {
                 HealthScreen(
                     onAddExtraVisit = { navController.navigate(Destinations.AddVisit.route) },
@@ -297,14 +308,6 @@ fun AppRoot() {
                     initialEveryUnit = "hours",
                     onConfirm = { navController.navigateUp() },
                     onBack = { navController.navigateUp() }
-                )
-            }
-            composable(Destinations.Profile.route) { ProfileScreen(onBack = { navController.navigateUp() }) }
-            composable(Destinations.AddVisit.route) {
-                AddVisitScreen(
-                    onBack = { navController.navigateUp() },
-                    onSave = { _,_,_,_,_,_ -> navController.navigateUp() },
-                    onCancel = { navController.navigateUp() }
                 )
             }
             composable(Destinations.Reschedule.route) {
