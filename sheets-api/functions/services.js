@@ -1135,7 +1135,7 @@ function addIntervalISO(baseIso, number, unit) {
   return out;
 }
 
-function calculateNextAndLast(baseIso, n, unit, clientNowStr, clientOffsetMinutes) {
+function calculateNextAndLast(baseIso, n, unit) {
   const pad = (x) => String(x).padStart(2, "0");
   const formatLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const parseLocal = (s) => {
@@ -1143,20 +1143,25 @@ function calculateNextAndLast(baseIso, n, unit, clientNowStr, clientOffsetMinute
     const m = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
     if (!m) return new Date(NaN);
     const [_, yyyy, mm, dd, HH, MM] = m;
+    // ⚡ Importante: construimos una fecha "naive local", sin zonas horarias
     return new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(HH), Number(MM));
   };
 
-  // Prefer client-provided 'now' in su zona local si viene del cliente
-  const now = clientNowStr ? parseLocal(String(clientNowStr)) : new Date();
+  // 📅 Parseamos la fecha base del usuario como local
   const start = parseLocal(baseIso);
   if (Number.isNaN(start.getTime())) {
     throw new Error(`Invalid baseIso: ${baseIso}`);
   }
 
-  logger.info(`[calcNext] now=${formatLocal(now)}, start=${formatLocal(start)}, unit=${unit}, n=${n}, clientOffsetMinutes=${clientOffsetMinutes}`);
+  // ⚙️ Creamos un "now" local, sin UTC (mismo tipo que start)
+  const now = new Date();
+  const localNow = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
 
-  // Caso 1️⃣: fecha futura
-  if (start > now) {
+  logger.info(`[calcNext] Comparando en hora local del usuario`);
+  logger.info(`[calcNext] start=${formatLocal(start)}, now=${formatLocal(localNow)}`);
+
+  // 📍 Si la fecha ingresada es futura
+  if (start > localNow) {
     logger.info(`[calcNext] Fecha futura detectada — next=${formatLocal(start)}, last=(ninguno)`);
     return {
       last_performed_at: "",
@@ -1164,18 +1169,16 @@ function calculateNextAndLast(baseIso, n, unit, clientNowStr, clientOffsetMinute
     };
   }
 
-  // Caso 2️⃣: fecha pasada — iterar hasta llegar al futuro
+  // 📍 Si la fecha ingresada es pasada
   let next = new Date(start.getTime());
   let iterations = 0;
 
-  while (next <= now) {
+  while (next <= localNow) {
     iterations++;
-    const nextStr = addIntervalISO(formatLocal(next), n, unit); // returns local string
+    const nextStr = addIntervalISO(formatLocal(next), n, unit);
     const newNext = parseLocal(nextStr);
-    const condition = newNext > now;
-    logger.info(
-      `[calcNext] Iteración ${iterations} — comparando ${formatLocal(newNext)} > ${formatLocal(now)} = ${condition}`
-    );
+    const condition = newNext > localNow;
+    logger.info(`[calcNext] Iteración ${iterations} — comparando ${formatLocal(newNext)} > ${formatLocal(localNow)} = ${condition}`);
 
     next = newNext;
     if (iterations > 10000) throw new Error("Loop infinito detectado");
@@ -1188,7 +1191,6 @@ function calculateNextAndLast(baseIso, n, unit, clientNowStr, clientOffsetMinute
     next_activity: formatLocal(next),
   };
 }
-
 
 async function performRoutineService({userId, body}) {
   const routineId = required(body.routine_id || body.id, "routine_id");
