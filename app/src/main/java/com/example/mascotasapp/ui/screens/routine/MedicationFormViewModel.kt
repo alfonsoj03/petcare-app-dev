@@ -50,6 +50,7 @@ class MedicationFormViewModel : ViewModel() {
         doseNumber: String,
         doseUnit: String,
         totalDoses: Int,
+        additionalPetIds: Set<String> = emptySet(),
     ) {
         val current = _uiState.value
         if (current.isSubmitting || !current.isValid) return
@@ -62,7 +63,7 @@ class MedicationFormViewModel : ViewModel() {
                 withContext(Dispatchers.IO) {
                     MedicationsRepository.createMedicationForPets(
                         baseUrl = ApiConfig.BASE_URL,
-                        petIds = setOf(selectedId),
+                        petIds = (setOf(selectedId) + additionalPetIds).toSet(),
                         name = name,
                         startOfSupply = startOfSupply,
                         everyNumber = everyNumber,
