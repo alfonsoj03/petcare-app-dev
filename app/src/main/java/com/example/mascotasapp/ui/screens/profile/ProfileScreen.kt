@@ -104,14 +104,6 @@ fun ProfileScreen(onBack: () -> Unit = {}, onSignOut: () -> Unit = {}) {
             // Cards list
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 SettingRow(
-                    title = "Notifications",
-                    subtitle = "Manage your alerts",
-                    icon = Icons.Filled.Notifications,
-                    bgColor = Color(0xFFFEF3C7), // soft orange
-                    iconTint = Color(0xFFF59E0B),
-                    showDot = true
-                )
-                SettingRow(
                     title = "Privacy & Security",
                     subtitle = "Control your data",
                     icon = Icons.Filled.Lock,
