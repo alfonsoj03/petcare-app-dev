@@ -51,6 +51,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.mascotasapp.core.SelectedPetStore
 import com.example.mascotasapp.core.ApiConfig
 import com.example.mascotasapp.data.repository.PetsRepository
+import com.example.mascotasapp.data.repository.MedicationsRepository
+import com.example.mascotasapp.data.repository.RoutinesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -76,6 +78,8 @@ fun DashboardScreen(
     LaunchedEffect(Unit) {
         SelectedPetStore.init(ctx)
         PetsRepository.init(ctx)
+        MedicationsRepository.init(ctx)
+        RoutinesRepository.init(ctx)
         val baseUrl = ApiConfig.BASE_URL
         // Load cache immediately, then refresh in background
         runCatching { PetsRepository.refresh(baseUrl) }
@@ -96,6 +100,72 @@ fun DashboardScreen(
         pets.firstOrNull { it.pet_id == selectedPetId } ?: pets.firstOrNull()
     }
     val hasPets = pets.isNotEmpty()
+
+    // Load meds and routines for selected pet, and build UI models
+    val medsFlow = remember(selectedPetId) {
+        selectedPetId?.let { MedicationsRepository.medsFlow(it) }
+    }
+    val routinesFlow = remember(selectedPetId) {
+        selectedPetId?.let { RoutinesRepository.routinesFlow(it) }
+    }
+    val meds = medsFlow?.collectAsStateWithLifecycle()?.value ?: emptyList()
+    val routines = routinesFlow?.collectAsStateWithLifecycle()?.value ?: emptyList()
+
+    LaunchedEffect(selectedPetId) {
+        val id = selectedPetId ?: return@LaunchedEffect
+        val base = ApiConfig.BASE_URL
+        runCatching { MedicationsRepository.refresh(base, id) }
+        runCatching { RoutinesRepository.refresh(base, id) }
+    }
+
+    // Compute next upcoming action (top green card)
+    fun parseTime(s: String): java.time.LocalDateTime? = runCatching {
+        if (s.isBlank()) null else java.time.LocalDateTime.parse(s, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+    }.getOrNull()
+    data class NextCard(val title: String, val subtitle: String)
+    val nextCard: NextCard? = run {
+        val nextMed = meds.minByOrNull { parseTime(it.next_dose) ?: java.time.LocalDateTime.MAX }
+        val nextRut = routines.minByOrNull { parseTime(it.next_activity) ?: java.time.LocalDateTime.MAX }
+        val medTime = nextMed?.let { parseTime(it.next_dose) }
+        val rutTime = nextRut?.let { parseTime(it.next_activity) }
+        when {
+            medTime != null && (rutTime == null || medTime.isBefore(rutTime)) ->
+                NextCard(title = "Next medication", subtitle = "${nextMed.medication_name} at ${nextMed.next_dose}")
+            rutTime != null ->
+                NextCard(title = "Next routine", subtitle = "${nextRut.routine_name} at ${nextRut.next_activity}")
+            else -> null
+        }
+    }
+
+    // Build recent created items list (bottom section)
+    val recent: List<Activity> = run {
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        fun parseCreated(v: String): java.time.LocalDateTime = runCatching { java.time.LocalDateTime.parse(v, fmt) }.getOrElse { java.time.LocalDateTime.MIN }
+        val medActivities = meds.filter { it.created_at.isNotBlank() }.map {
+            Activity(
+                title = "Medication added",
+                subtitle = it.medication_name,
+                time = it.created_at,
+                icon = Icons.Default.Vaccines,
+                bg = Color(0xFFCFFAFE),
+                tint = Color(0xFF0891B2)
+            ) to parseCreated(it.created_at)
+        }
+        val rutActivities = routines.filter { it.created_at.isNotBlank() }.map {
+            Activity(
+                title = "Routine added",
+                subtitle = it.routine_name,
+                time = it.created_at,
+                icon = Icons.Default.Schedule,
+                bg = Color(0xFFDCFCE7),
+                tint = Color(0xFF16A34A)
+            ) to parseCreated(it.created_at)
+        }
+        medActivities.plus(rutActivities)
+            .sortedByDescending { it.second }
+            .take(10)
+            .map { it.first }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -168,40 +238,7 @@ fun DashboardScreen(
             .padding(padding)
             .padding(horizontal = 16.dp, vertical = 12.dp)
 
-        // For now, demo flags for whether there is health or routine activity
-        // In a real integration, compute these from backend responses
-        val hasHealthActivity by remember { mutableStateOf(false) }
-        val hasRoutineActivity by remember { mutableStateOf(false) }
-
         val primary = MaterialTheme.colorScheme.primary
-        val recent = run {
-            val items = mutableListOf<Activity>()
-            if (hasHealthActivity) {
-                items.add(
-                    Activity(
-                        title = "Vaccine Recorded",
-                        subtitle = "Rabies booster updated",
-                        time = "2 hours ago",
-                        icon = Icons.Default.Vaccines,
-                        bg = primary.copy(alpha = 0.12f),
-                        tint = primary
-                    )
-                )
-            }
-            if (hasRoutineActivity) {
-                items.add(
-                    Activity(
-                        title = "Bath Recorded",
-                        subtitle = "Weekly grooming session",
-                        time = "Yesterday",
-                        icon = Icons.Default.Opacity,
-                        bg = Color(0xFFCFFAFE),
-                        tint = Color(0xFF0891B2)
-                    )
-                )
-            }
-            items
-        }
 
         when (hasPets) {
             null -> { // loading: show nothing special to keep it light
@@ -220,16 +257,16 @@ fun DashboardScreen(
                             petName = selectedPet?.name ?: "Pet",
                             petBreed = selectedPet?.breed ?: "",
                             petAgeYears = selectedPet?.date_of_birth?.let { safeYearsFromDob(it) } ?: 0,
+                            nextTitle = nextCard?.title,
+                            nextSubtitle = nextCard?.subtitle,
                             onOpenHealth = onOpenHealth,
                             onOpenRoutine = onOpenRoutine,
-                            hasHealthActivity = hasHealthActivity,
-                            hasRoutineActivity = hasRoutineActivity
                         )
                     }
                     item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
                     item {
                         val petName = selectedPet?.name ?: "your pet"
-                        RecentActivitySectionForPet(petName = petName, recent = mutableListOf<Activity>().apply { addAll(recent) })
+                        RecentActivitySectionForPet(petName = petName, recent = recent)
                     }
                 }
             }
@@ -302,10 +339,10 @@ private fun PetCard(
     petName: String,
     petBreed: String,
     petAgeYears: Int,
+    nextTitle: String?,
+    nextSubtitle: String?,
     onOpenHealth: () -> Unit,
     onOpenRoutine: () -> Unit,
-    hasHealthActivity: Boolean,
-    hasRoutineActivity: Boolean
 ) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primary)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -333,7 +370,7 @@ private fun PetCard(
                 Icon(imageVector = Icons.Default.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
             }
 
-            if (!hasHealthActivity && !hasRoutineActivity) {
+            if (nextTitle.isNullOrBlank()) {
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF33C59D)), shape = MaterialTheme.shapes.medium) {
                     Row(
                         modifier = Modifier
@@ -349,23 +386,12 @@ private fun PetCard(
                     }
                 }
             } else {
-                if (hasHealthActivity) {
-                    InfoRowCard(
-                        title = "Next Vaccine",
-                        subtitle = "Rabies vaccination due in 5 days",
-                        icon = Icons.Default.Vaccines,
-                        onClick = onOpenHealth
-                    )
-                }
-                if (hasRoutineActivity) {
-                    InfoRowCard(
-                        title = "Next vet visit",
-                        subtitle = "2025-10-15",
-                        icon = Icons.Default.Event,
-                        onClick = onOpenHealth,
-                        modifier = Modifier.padding(bottom = 5.dp)
-                    )
-                }
+                InfoRowCard(
+                    title = nextTitle,
+                    subtitle = nextSubtitle ?: "",
+                    icon = Icons.Default.Event,
+                    onClick = onOpenRoutine
+                )
             }
         }
     }
