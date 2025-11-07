@@ -270,6 +270,10 @@ fun RoutineScreen(
                         onDelete = { pendingMedDelete = m.assignment_id to m.medication_id }
                     )
                 }
+            } else {
+                item {
+                    Text("No medications yet.", style = MaterialTheme.typography.bodyMedium, color = muted)
+                }
             }
             item { Spacer(Modifier.height(8.dp)) }
         }
