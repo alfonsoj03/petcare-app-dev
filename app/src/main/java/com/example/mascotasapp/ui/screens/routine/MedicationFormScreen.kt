@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import com.example.mascotasapp.ui.components.LabeledField
 import com.example.mascotasapp.core.ApiConfig
 import com.example.mascotasapp.core.SelectedPetStore
@@ -109,17 +111,19 @@ fun MedicationFormScreen(
             val timePart = parts[1]
             
             val date = LocalDate.parse(datePart)
-            val today = LocalDate.now()
             val timeParts = timePart.split(":")
             val hour = timeParts[0].toInt()
             val minute = timeParts[1].toInt()
             
             when {
                 date.year < 1900 -> "Year must be ≥ 1900"
-                date.isBefore(today.minusYears(40)) -> "Unrealistic age"
                 hour !in 0..23 -> "Invalid hour"
                 minute !in 0..59 -> "Invalid minute"
-                else -> null
+                else -> {
+                    val candidate = LocalDateTime.of(date, LocalTime.of(hour, minute))
+                    val now = LocalDateTime.now()
+                    if (!candidate.isAfter(now)) "Must be in the future" else null
+                }
             }
         } catch (e: Exception) {
             "Invalid date/time"
