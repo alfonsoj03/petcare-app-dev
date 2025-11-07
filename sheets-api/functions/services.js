@@ -1135,7 +1135,7 @@ function addIntervalISO(baseIso, number, unit) {
   return out;
 }
 
-function calculateNextAndLast(baseIso, n, unit) {
+function calculateNextAndLast(baseIso, n, unit, clientNowStr, startEpochMs, clientNowEpochMs) {
   const pad = (x) => String(x).padStart(2, "0");
   const formatLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const parseLocal = (s) => {
@@ -1146,6 +1146,66 @@ function calculateNextAndLast(baseIso, n, unit) {
     // ⚡ Importante: construimos una fecha "naive local", sin zonas horarias
     return new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(HH), Number(MM));
   };
+  // Si recibimos epoch desde el cliente, usemos ese camino (evita drift por TZ/DST)
+  const hasStartEpoch = Number.isFinite(Number(startEpochMs)) && Number(startEpochMs) > 0;
+  const hasClientNowEpoch = Number.isFinite(Number(clientNowEpochMs)) && Number(clientNowEpochMs) > 0;
+
+  if (hasStartEpoch) {
+    const baseMs = Number(startEpochMs);
+    // Derivar nowMs para comparación
+    const nowMs = hasClientNowEpoch ? Number(clientNowEpochMs) : Date.now();
+    // Intervalos en ms (mes = 30 días como en lógica actual)
+    const hourMs = 60 * 60 * 1000;
+    const dayMs = 24 * hourMs;
+    const weekMs = 7 * dayMs;
+    const unitLower = String(unit || "").toLowerCase();
+    const nInt = Number(n) | 0;
+    const stepMs = (unitLower === "hour" || unitLower === "hours") ? nInt * hourMs
+                  : (unitLower === "day" || unitLower === "days") ? nInt * dayMs
+                  : (unitLower === "week" || unitLower === "weeks") ? nInt * weekMs
+                  : /* month(s) */ nInt * 30 * dayMs;
+    if (stepMs <= 0) {
+      return { last_performed_at: baseMs, next_activity: baseMs };
+    }
+    if (baseMs > nowMs) {
+      return { last_performed_at: "", next_activity: baseMs };
+    }
+    let next = baseMs;
+    let iter = 0;
+    while (next <= nowMs) {
+      next += stepMs;
+      iter++;
+      if (iter > 100000) break;
+    }
+    return { last_performed_at: baseMs, next_activity: next };
+  }
+
+  // Offset estimado a partir de client_now vs servidor (fallback si no hay epoch del cliente)
+  let clientOffsetMs = 0;
+  if (clientNowStr && String(clientNowStr).trim()) {
+    const m = String(clientNowStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
+    if (m) {
+      const yyyy = Number(m[1]);
+      const mm = Number(m[2]);
+      const dd = Number(m[3]);
+      const HH = Number(m[4]);
+      const MM = Number(m[5]);
+      const clientNowUtcByLocal = Date.UTC(yyyy, mm - 1, dd, HH, MM, 0, 0);
+      const serverUtcNow = Date.now();
+      clientOffsetMs = clientNowUtcByLocal - serverUtcNow;
+    }
+  }
+  const toUtcMsFromLocalString = (s) => {
+    const m = String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
+    if (!m) return NaN;
+    const yyyy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    const HH = Number(m[4]);
+    const MM = Number(m[5]);
+    // UTC = local - offset
+    return Date.UTC(yyyy, mm - 1, dd, HH, MM, 0, 0) - clientOffsetMs;
+  };
 
   // 📅 Parseamos la fecha base del usuario como local
   const start = parseLocal(baseIso);
@@ -1153,9 +1213,14 @@ function calculateNextAndLast(baseIso, n, unit) {
     throw new Error(`Invalid baseIso: ${baseIso}`);
   }
 
-  // ⚙️ Creamos un "now" local, sin UTC (mismo tipo que start)
-  const now = new Date();
-  const localNow = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+  // ⚙️ "now" local basado en clientNowStr si viene; si no, usamos hora local del servidor
+  let localNow;
+  if (clientNowStr && String(clientNowStr).trim()) {
+    localNow = parseLocal(String(clientNowStr).trim());
+  } else {
+    const now = new Date();
+    localNow = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+  }
 
   logger.info(`[calcNext] Comparando en hora local del usuario`);
   logger.info(`[calcNext] start=${formatLocal(start)}, now=${formatLocal(localNow)}`);
@@ -1163,9 +1228,11 @@ function calculateNextAndLast(baseIso, n, unit) {
   // 📍 Si la fecha ingresada es futura
   if (start > localNow) {
     logger.info(`[calcNext] Fecha futura detectada — next=${formatLocal(start)}, last=(ninguno)`);
+    const nextLocalStr = formatLocal(start);
     return {
+      // last vacío (sin ejecución aún), next en epoch UTC (ms) derivado de la hora "naive local"
       last_performed_at: "",
-      next_activity: formatLocal(start),
+      next_activity: toUtcMsFromLocalString(nextLocalStr),
     };
   }
 
@@ -1186,21 +1253,18 @@ function calculateNextAndLast(baseIso, n, unit) {
 
   logger.info(`[calcNext] Resultado final — last=${formatLocal(start)}, next=${formatLocal(next)}`);
 
+  const lastLocalStr = formatLocal(start);
+  const nextLocalStr = formatLocal(next);
   return {
-    last_performed_at: formatLocal(start),
-    next_activity: formatLocal(next),
+    // ambos en epoch UTC (ms) derivados de las cadenas "naive local"
+    last_performed_at: toUtcMsFromLocalString(lastLocalStr),
+    next_activity: toUtcMsFromLocalString(nextLocalStr),
   };
 }
 
 async function performRoutineService({userId, body}) {
   const routineId = required(body.routine_id || body.id, "routine_id");
   const petId = required(body.pet_id, "pet_id");
-  const performedAtRaw = required(body.performed_at, "performed_at");
-  const performedAt = String(performedAtRaw).trim();
-  const performedDate = new Date(performedAt);
-  if (Number.isNaN(performedDate.getTime())) {
-    const e = new Error("performed_at must be a valid ISO datetime"); e.status = 400; throw e;
-  }
 
   const spreadsheetId = ensureSpreadsheetId();
   const sheets = await getSheetsClient();
@@ -1241,21 +1305,38 @@ async function performRoutineService({userId, body}) {
   }
   if (foundIndex === -1) { const e = new Error("Assignment not found"); e.status = 404; throw e; }
 
-  const nextActivity = addIntervalISO(performedAt, everyNum, everyUnit);
+  const row = arows[foundIndex];
+  const currentNextRaw = row[6];
+  const currentNextMs = Number(currentNextRaw);
+  if (!Number.isFinite(currentNextMs)) { const e = new Error("Current next_activity is invalid"); e.status = 400; throw e; }
 
-  // Update last_performed_at (F) and next_activity (G) in the found row (1-indexed rows)
+  // compute stepMs from interval
+  const hourMs = 60 * 60 * 1000;
+  const dayMs = 24 * hourMs;
+  const weekMs = 7 * dayMs;
+  const unitLower = everyUnit.toLowerCase();
+  const nInt = Number(everyNum) | 0;
+  const stepMs = (unitLower === "hour" || unitLower === "hours") ? nInt * hourMs
+                : (unitLower === "day" || unitLower === "days") ? nInt * dayMs
+                : (unitLower === "week" || unitLower === "weeks") ? nInt * weekMs
+                : /* month(s) */ nInt * 30 * dayMs;
+
+  const newLastMs = currentNextMs;
+  const newNextMs = currentNextMs + stepMs;
+
+  // Update last_performed_at (F) and next_activity (G) in epoch ms
   const rowNumber = foundIndex + 1; // account for header
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `routineassignments!F${rowNumber}:G${rowNumber}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {values: [[performedAt, nextActivity]]},
+    valueInputOption: "RAW",
+    requestBody: {values: [[newLastMs, newNextMs]]},
   });
 
   // Log activity
   const activityId = admin.firestore().collection("_ids").doc().id;
   const now = isoNow();
-  const details = JSON.stringify({next_activity: nextActivity});
+  const details = JSON.stringify({ last_performed_at: newLastMs, next_activity: newNextMs });
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: "activitylog!A1",
@@ -1264,15 +1345,15 @@ async function performRoutineService({userId, body}) {
     requestBody: {values: [[
       activityId,
       userId,
-      "perform_routine",
+      "PERFORM_ROUTINE",
       "routineassignments",
       assignmentId,
-      performedAt,
+      now,
       details,
     ]]},
   });
 
-  return {assignment_id: assignmentId, last_performed_at: performedAt, next_activity: nextActivity, updated_at: now};
+  return {assignment_id: assignmentId, last_performed_at: newLastMs, next_activity: newNextMs, updated_at: now};
 }
 
 async function getPetsService() {
@@ -1472,14 +1553,26 @@ async function createRoutineService({userId, body}) {
   const spreadsheetId = ensureSpreadsheetId();
   const now = isoNow();
   const routineId = admin.firestore().collection("_ids").doc().id;
-  const { last_performed_at, next_activity } = calculateNextAndLast(startISO, n, unit);
+  const clientNow = body.client_now ? String(body.client_now).trim() : "";
+  const startEpochMs = Number(body.start_epoch_ms || 0);
+  const clientNowEpochMs = Number(body.client_now_epoch_ms || 0);
+  // Usamos la fecha local original (YYYY-MM-DD HH:mm) para cálculos neutros de zona,
+  // y cuando están disponibles epoch del cliente, los priorizamos para evitar desfases.
+  const { last_performed_at, next_activity } = calculateNextAndLast(
+    startStr,
+    n,
+    unit,
+    clientNow,
+    startEpochMs,
+    clientNowEpochMs
+  );
 
   const sheets = await getSheetsClient();
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: "routines!A1",
-    valueInputOption: "USER_ENTERED",
+    valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: {values: [[
       routineId,
@@ -1518,7 +1611,7 @@ async function createRoutineService({userId, body}) {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: "routineassignments!A1",
-      valueInputOption: "USER_ENTERED",
+      valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS",
       requestBody: {values},
     });
