@@ -80,6 +80,7 @@ fun RoutineScreen(
     var isDeleting by remember { mutableStateOf(false) }
     var pendingMedDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
     var isDeletingMed by remember { mutableStateOf(false) }
+    var markingRoutineId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -177,7 +178,28 @@ fun RoutineScreen(
                         statusFg = statusFg,
                         lastDate = lastPretty,
                         nextDate = nextPretty,
-                        onMarkDone = { onMarkDone(r.routine_id) },
+                        loading = (markingRoutineId == r.routine_id),
+                        onMarkDone = {
+                            val pid = selectedPetId
+                            if (!pid.isNullOrBlank() && markingRoutineId == null) {
+                                markingRoutineId = r.routine_id
+                                scope.launch {
+                                    try {
+                                        RoutinesRepository.performRoutine(
+                                            baseUrl = ApiConfig.BASE_URL,
+                                            routineId = r.routine_id,
+                                            petId = pid
+                                        )
+                                        snackbarHostState.showSnackbar("Marked as done")
+                                        runCatching { RoutinesRepository.refresh(ApiConfig.BASE_URL, pid) }
+                                    } catch (t: Throwable) {
+                                        snackbarHostState.showSnackbar(t.message ?: "Error")
+                                    } finally {
+                                        markingRoutineId = null
+                                    }
+                                }
+                            }
+                        },
                         onDelete = { pendingDelete = r.assignment_id to r.routine_id }
                     )
                 }
@@ -383,7 +405,8 @@ private fun RoutineCard(
     nextDate: String,
     onMarkDone: () -> Unit,
     onDelete: () -> Unit,
-    highlightNextColor: Color? = null
+    highlightNextColor: Color? = null,
+    loading: Boolean = false
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -419,9 +442,18 @@ private fun RoutineCard(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp)
+                        .height(44.dp),
+                    enabled = !loading
                 ) {
-                    Text("Mark as done")
+                    if (loading) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Marking...")
+                        }
+                    } else {
+                        Text("Mark as done")
+                    }
                 }
                 val danger = Color(0xFFEF4444)
                 OutlinedButton(
@@ -519,13 +551,44 @@ private fun MedicationCard(
 }
 
 private fun formatDateTimePretty(raw: String?): String {
-    val s = raw?.trim().orEmpty()
-    if (s.isBlank()) return "--"
-    val zone = ZoneId.systemDefault()
-    val fmt = DateTimeFormatter.ofPattern("MMM d, yyyy, h:mm a", Locale.getDefault())
-    runCatching { Instant.parse(s).atZone(zone).format(fmt) }.onSuccess { return it }
-    val normalized = if (s.matches(Regex("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$"))) s.replace(' ', 'T') else s
-    runCatching { LocalDateTime.parse(normalized).atZone(zone).format(fmt) }.onSuccess { return it }
-    runCatching { LocalDate.parse(s).format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())) }.onSuccess { return it }
-    return s
+  val s = raw?.trim().orEmpty()
+  if (s.isBlank()) return "--"
+  val zone = ZoneId.systemDefault()
+  val fmt = DateTimeFormatter.ofPattern("MMM d, yyyy, h:mm a", Locale.ENGLISH)
+  runCatching { Instant.parse(s).atZone(zone).format(fmt) }.onSuccess { return it }
+  val normalizedSpaceSlashes = s.replace(" / ", "/")
+  // Try dd/MM/yyyy HH:mm:ss (e.g., 02/11/2025 20:00:00)
+  runCatching { LocalDateTime.parse(normalizedSpaceSlashes, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")).atZone(zone).format(fmt) }.onSuccess { return it }
+  // Try dd/MM/yyyy HH:mm (e.g., 02/11/2025 20:00)
+  runCatching { LocalDateTime.parse(normalizedSpaceSlashes, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")).atZone(zone).format(fmt) }.onSuccess { return it }
+  // Try yyyy-MM-dd HH:mm -> yyyy-MM-ddTHH:mm
+  val normalized = if (s.matches(Regex("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$"))) s.replace(' ', 'T') else s
+  runCatching { LocalDateTime.parse(normalized).atZone(zone).format(fmt) }.onSuccess { return it }
+  // Try dd/MM/yyyy (date only)
+  runCatching { LocalDate.parse(normalizedSpaceSlashes, DateTimeFormatter.ofPattern("dd/MM/yyyy")).format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())) }.onSuccess { return it }
+  // Try yyyy-MM-dd (date only)
+  runCatching { LocalDate.parse(s).format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())) }.onSuccess { return it }
+  // Try numeric inputs
+  if (s.matches(Regex("^\\d+(\\.\\d+)?$"))) {
+    // Epoch millis/seconds detection first
+    runCatching {
+      val asLong = s.toLong()
+      val instant = when {
+        asLong > 1_000_000_000_000L -> java.time.Instant.ofEpochMilli(asLong) // clearly millis
+        asLong in 1_000_000_000L..1_000_000_000_000L -> java.time.Instant.ofEpochSecond(asLong) // seconds range
+        else -> null
+      }
+      if (instant != null) return instant.atZone(zone).format(fmt)
+    }
+    // Fallback: Google Sheets/Excel serial number (e.g., 45968.333333336)
+    runCatching {
+      val v = s.toDouble()
+      val days = kotlin.math.floor(v)
+      val seconds = Math.round((v - days) * 86400.0) // Long
+      val base = LocalDateTime.of(1899, 12, 30, 0, 0) // Excel epoch
+      val dt = base.plusDays(days.toLong()).plusSeconds(seconds)
+      return dt.atZone(zone).format(fmt)
+    }
+  }
+  return s
 }

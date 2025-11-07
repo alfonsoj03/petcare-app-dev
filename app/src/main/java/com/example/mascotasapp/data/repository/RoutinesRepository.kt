@@ -14,6 +14,8 @@ import java.time.format.DateTimeFormatter
 import java.time.Duration
 import com.google.firebase.auth.FirebaseAuth
 import com.google.android.gms.tasks.Tasks
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object RoutinesRepository {
     private const val PREFS_NAME = "routines_cache"
@@ -81,12 +83,21 @@ object RoutinesRepository {
                     setRequestProperty("Authorization", "Bearer $idToken")
                 }
             }
+            val clientNow = LocalDateTime.now().format(dtf)
+            val clientNowEpoch = System.currentTimeMillis()
+            val startEpochMs = runCatching {
+                val ldt = LocalDateTime.parse(startOfActivity, dtf)
+                ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }.getOrElse { 0L }
             val payload = JSONObject().apply {
                 put("routine_name", name)
                 put("start_of_activity", startOfActivity)
                 put("perform_every_number", everyNumber)
                 put("perform_every_unit", everyUnit)
                 put("assign_to_pets", JSONArray(petIds.toList()))
+                put("client_now", clientNow)
+                put("client_now_epoch_ms", clientNowEpoch)
+                if (startEpochMs > 0L) put("start_epoch_ms", startEpochMs)
             }.toString()
             Log.d(TAG, "Payload=${payload}")
             conn.outputStream.use { it.write(payload.toByteArray()) }
@@ -225,6 +236,57 @@ object RoutinesRepository {
         return deleted
     }
 
+    suspend fun performRoutine(baseUrl: String, routineId: String, petId: String) {
+        withContext(Dispatchers.IO) {
+            val auth = FirebaseAuth.getInstance()
+            if (auth.currentUser == null) {
+                Tasks.await(auth.signInAnonymously())
+            }
+            val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+            val url = URL("$baseUrl/performRoutine?routine_id=$routineId")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("X-Debug-Uid", "dev-user")
+                if (!idToken.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $idToken")
+                }
+            }
+            val payload = JSONObject().apply {
+                put("pet_id", petId)
+            }.toString()
+            conn.outputStream.use { it.write(payload.toByteArray()) }
+            val code = conn.responseCode
+            val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+            if (code !in 200..299) throw RuntimeException("perform routine error $code: $body")
+            // Optimistic local cache update (switch to Main for UI state mutation)
+            val parsed = runCatching { JSONObject(body) }.getOrNull()
+            if (parsed != null) {
+                val assignmentId = parsed.optString("assignment_id")
+                val lastMs = parsed.optString("last_performed_at")
+                val nextMs = parsed.optString("next_activity")
+                if (assignmentId.isNotBlank()) {
+                    withContext(Dispatchers.Main) {
+                        val flow = perPetCache.getOrPut(petId) { MutableStateFlow(loadCache(petId)) }
+                        val current = flow.value.toMutableList()
+                        val idx = current.indexOfFirst { it.assignment_id == assignmentId }
+                        if (idx >= 0) {
+                            val old = current[idx]
+                            val updated = old.copy(
+                                last_performed_at = lastMs,
+                                next_activity = nextMs
+                            )
+                            current[idx] = updated
+                            flow.value = current
+                            saveCache(petId, JSONArray(current.map { toJson(it) }).toString())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private fun saveCache(petId: String, json: String) {
         if (!this::prefs.isInitialized) return
         prefs.edit().putString(KEY_ROUTINES_PREFIX + petId, json).apply()
@@ -295,12 +357,21 @@ object RoutinesRepository {
                 setRequestProperty("Authorization", "Bearer $idToken")
             }
         }
+        val clientNow = LocalDateTime.now().format(dtf)
+        val clientNowEpoch = System.currentTimeMillis()
+        val startEpochMs = runCatching {
+            val ldt = LocalDateTime.parse(startOfActivity, dtf)
+            ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        }.getOrElse { 0L }
         val payload = JSONObject().apply {
             put("pet_id", petId)
             put("routine_name", name)
             put("start_of_activity", startOfActivity)
             put("perform_every_number", everyNumber)
             put("perform_every_unit", everyUnit)
+            put("client_now", clientNow)
+            put("client_now_epoch_ms", clientNowEpoch)
+            if (startEpochMs > 0L) put("start_epoch_ms", startEpochMs)
         }.toString()
         conn.outputStream.use { it.write(payload.toByteArray()) }
         val code = conn.responseCode
