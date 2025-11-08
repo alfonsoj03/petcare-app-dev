@@ -23,6 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.mascotasapp.ui.theme.MascotasAppTheme
 import com.example.mascotasapp.ui.navigation.Destinations
 import com.example.mascotasapp.ui.screens.splash.SplashScreen
@@ -116,7 +117,7 @@ fun AppRoot() {
                 Destinations.AddPet.route,
                 Destinations.EditPet.route
             )
-            if (currentRoute !in hideBottomBarRoutes) {
+            if (currentRoute !in hideBottomBarRoutes && currentRoute?.startsWith(Destinations.Splash.route) != true) {
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .background(Color(0xFFF9FAFB))
@@ -168,14 +169,19 @@ fun AppRoot() {
             startDestination = Destinations.Splash.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Destinations.Splash.route) {
+            composable(
+                route = Destinations.Splash.route + "?${Destinations.Splash.ArgNext}={${Destinations.Splash.ArgNext}}",
+                arguments = listOf(navArgument(Destinations.Splash.ArgNext) { nullable = true })
+            ) { backStack ->
+                val next = backStack.arguments?.getString(Destinations.Splash.ArgNext)
                 SplashScreen(
                     onFinished = {
-                    navController.navigate(Destinations.Login.route) {
-                        popUpTo(Destinations.Splash.route) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
+                        val target = next ?: Destinations.Login.route
+                        navController.navigate(target) {
+                            popUpTo(Destinations.Splash.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
                     topDecorationResId = R.drawable.splash_top_purple,
                     bottomDecorationResId = R.drawable.splash_bottom_green
                 )
@@ -183,7 +189,7 @@ fun AppRoot() {
             composable(Destinations.Login.route) {
                 LoginScreen(
                     onSignIn = {
-                        navController.navigate(Destinations.Dashboard.route) {
+                        navController.navigate(Destinations.Splash.routeFor(Destinations.Dashboard.route)) {
                             popUpTo(Destinations.Login.route) { inclusive = true }
                             launchSingleTop = true
                         }
