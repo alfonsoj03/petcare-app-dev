@@ -48,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -216,29 +217,42 @@ fun RoutineScreen(
             }
             if (medications.isNotEmpty()) {
                 items(medications, key = { it.assignment_id }) { m ->
+                    Log.d("MedUI", "item assignment=${m.assignment_id} start_raw=${m.start_of_medication} next_raw=${m.next_dose} take_every=${m.take_every_number} ${m.take_every_unit} total=${m.total_doses}")
                     val startPretty = formatDateTimePretty(m.start_of_medication)
                     val nextPretty = formatDateTimePretty(m.next_dose)
+                    Log.d("MedUI", "item assignment=${m.assignment_id} start_fmt=$startPretty next_fmt=$nextPretty")
                     val freq = when {
                         m.take_every_number.isBlank() || m.take_every_unit.isBlank() -> ""
                         else -> " - Every ${m.take_every_number} ${m.take_every_unit}"
                     }
                     val doseText = (m.dose.ifBlank { "" }) + freq
-                    // Compute End Date as start + (total_doses-1)*interval
+                    // Compute End Date as start + (total_doses-1)*interval (supports epoch or formatted start)
                     val endPretty = run {
                         try {
-                            val dtf = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-                            val start = java.time.LocalDateTime.parse(m.start_of_medication, dtf)
+                            val startStr = m.start_of_medication.trim()
+                            val startEpoch: Long? = when {
+                                startStr.matches(Regex("^\\d+(\\.\\d+)?$")) -> {
+                                    val num = startStr.toDouble()
+                                    if (num > 1_000_000_000_000.0) num.toLong() else (num.toLong() * 1000)
+                                }
+                                else -> {
+                                    val dtf = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                                    runCatching { java.time.LocalDateTime.parse(startStr, dtf).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull()
+                                }
+                            }
                             val n = m.take_every_number.toLongOrNull() ?: 0L
                             val total = m.total_doses.toLongOrNull() ?: 0L
-                            val dur = when (m.take_every_unit.lowercase()) {
-                                "hour", "hours" -> java.time.Duration.ofHours(n)
-                                "day", "days" -> java.time.Duration.ofDays(n)
-                                "week", "weeks" -> java.time.Duration.ofDays(7 * n)
-                                "month", "months" -> java.time.Duration.ofDays(30 * n)
-                                else -> java.time.Duration.ofHours(n)
+                            val stepMs = when (m.take_every_unit.lowercase()) {
+                                "hour", "hours" -> 60L * 60L * 1000L * n
+                                "day", "days" -> 24L * 60L * 60L * 1000L * n
+                                "week", "weeks" -> 7L * 24L * 60L * 60L * 1000L * n
+                                "month", "months" -> 30L * 24L * 60L * 60L * 1000L * n
+                                else -> 60L * 60L * 1000L * n
                             }
-                            val end = if (n > 0 && total > 1) start.plusSeconds(dur.seconds * (total - 1)) else start
-                            formatDateTimePretty(dtf.format(end))
+                            val endEpoch = if (startEpoch != null && n > 0 && total > 1) startEpoch + stepMs * (total - 1) else startEpoch
+                            val endFmt = if (endEpoch != null) formatDateTimePretty(endEpoch.toString()) else ""
+                            Log.d("MedUI", "item assignment=${m.assignment_id} end_epoch=${endEpoch ?: "null"} end_fmt=$endFmt")
+                            endFmt
                         } catch (t: Throwable) { "" }
                     }
                     MedicationCard(

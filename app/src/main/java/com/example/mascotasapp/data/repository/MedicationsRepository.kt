@@ -13,6 +13,8 @@ import java.time.format.DateTimeFormatter
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.android.gms.tasks.Tasks
+import java.time.ZoneId
+import java.time.Instant
 
 object MedicationsRepository {
     private const val PREFS_NAME = "medications_cache"
@@ -33,6 +35,7 @@ object MedicationsRepository {
         val next_dose: String,
         val created_at: String,
         val total_doses: String = "",
+        val end_of_supply: String = "",
     )
 
     private lateinit var prefs: SharedPreferences
@@ -84,6 +87,12 @@ object MedicationsRepository {
             val arr = JSONArray(resp)
             val list = parseJsonArray(arr).sortedBy { parseDate(it.next_dose) }
             Log.d(TAG, "refresh: parsed ${list.size} items for pet=$petId")
+            list.forEach {
+                Log.d(
+                    TAG,
+                    "item assignment=${it.assignment_id} start=${it.start_of_medication} next=${it.next_dose} end=${it.end_of_supply} take_every=${it.take_every_number} ${it.take_every_unit} total=${it.total_doses}"
+                )
+            }
             val flow = perPetCache.getOrPut(petId) { MutableStateFlow(emptyList()) }
             flow.value = list
             Log.d(TAG, "refresh: flow updated size=${flow.value.size} for pet=$petId")
@@ -157,6 +166,14 @@ object MedicationsRepository {
         Log.d(TAG, "parseJsonArray: incoming length=${arr.length()}")
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
+            val startStr = o.optString("start_of_medication")
+            val lastStr = o.optString("last_taken_at")
+            val everyNum = o.optString("take_every_number")
+            val everyUnit = o.optString("take_every_unit")
+            val nextStr = o.optString("next_dose")
+            val endStr = o.optString("end_of_supply")
+            val nextFinal = if (nextStr.isNotBlank()) normalizeDateStr(nextStr) else computeNext(startStr, lastStr, everyNum, everyUnit)
+            val endFinal = if (endStr.isNotBlank()) normalizeDateStr(endStr) else computeEnd(startStr, everyNum, everyUnit, o.optString("total_doses"))
             out.add(
                 MedicationItem(
                     assignment_id = o.optString("assignment_id"),
@@ -165,13 +182,14 @@ object MedicationsRepository {
                     user_id = o.optString("user_id"),
                     medication_name = o.optString("medication_name"),
                     dose = o.optString("dose"),
-                    start_of_medication = o.optString("start_of_medication"),
-                    take_every_number = o.optString("take_every_number"),
-                    take_every_unit = o.optString("take_every_unit"),
-                    last_taken_at = o.optString("last_taken_at"),
-                    next_dose = o.optString("next_dose"),
+                    start_of_medication = normalizeDateStr(startStr),
+                    take_every_number = everyNum,
+                    take_every_unit = everyUnit,
+                    last_taken_at = normalizeDateStr(lastStr),
+                    next_dose = nextFinal,
                     created_at = o.optString("created_at"),
                     total_doses = o.optString("total_doses"),
+                    end_of_supply = endFinal,
                 )
             )
         }
@@ -193,16 +211,81 @@ object MedicationsRepository {
         put("next_dose", it.next_dose)
         put("created_at", it.created_at)
         put("total_doses", it.total_doses)
+        put("end_of_supply", it.end_of_supply)
     }
 
     private val dtf: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    private fun parseDate(v: String): LocalDateTime = runCatching { LocalDateTime.parse(v, dtf) }.getOrElse { LocalDateTime.MIN }
+    private fun parseDate(v: String): LocalDateTime {
+        val s = v.trim()
+        // Handle epoch seconds or milliseconds
+        if (s.matches(Regex("^\\d{10,13}$"))) {
+            val ms = if (s.length == 13) s.toLongOrNull() else s.toLongOrNull()?.let { it * 1000 }
+            if (ms != null) return LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault())
+        }
+        return runCatching { LocalDateTime.parse(s, dtf) }.getOrElse { LocalDateTime.MIN }
+    }
 
-    suspend fun createMedication(baseUrl: String, petId: String, name: String, dose: String, start: String, everyNumber: String, everyUnit: String): MedicationItem {
+    private fun normalizeDateStr(v: String): String {
+        val s = v.trim()
+        if (s.isEmpty()) return s
+        // Convert epoch seconds or ms to local formatted string
+        if (s.matches(Regex("^\\d{10,13}$"))) {
+            val ms = if (s.length == 13) s.toLongOrNull() else s.toLongOrNull()?.let { it * 1000 }
+            if (ms != null) {
+                val ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault())
+                return dtf.format(ldt)
+            }
+        }
+        return s
+    }
+
+    private fun addIntervalLocal(base: LocalDateTime, numberStr: String, unitStr: String): LocalDateTime {
+        val n = numberStr.toIntOrNull() ?: return base
+        val u = unitStr.lowercase()
+        return when {
+            u.startsWith("hour") -> base.plusHours(n.toLong())
+            u.startsWith("day") -> base.plusDays(n.toLong())
+            u.startsWith("week") -> base.plusWeeks(n.toLong())
+            u.startsWith("month") -> base.plusMonths(n.toLong())
+            else -> base
+        }
+    }
+
+    private fun computeNext(startStr: String, lastStr: String, everyNum: String, everyUnit: String): String {
+        val base = if (lastStr.isNotBlank()) parseDate(normalizeDateStr(lastStr)) else parseDate(normalizeDateStr(startStr))
+        if (base == LocalDateTime.MIN) return normalizeDateStr(startStr)
+        val next = addIntervalLocal(base, everyNum, everyUnit)
+        return dtf.format(next)
+    }
+
+    private fun computeEnd(startStr: String, everyNum: String, everyUnit: String, totalStr: String): String {
+        val total = totalStr.toIntOrNull() ?: return ""
+        if (total <= 0) return ""
+        var cur = parseDate(normalizeDateStr(startStr))
+        if (cur == LocalDateTime.MIN) return ""
+        repeat(total) { cur = addIntervalLocal(cur, everyNum, everyUnit) }
+        return dtf.format(cur)
+    }
+
+    suspend fun createMedication(
+        baseUrl: String,
+        petId: String,
+        name: String,
+        dose: String,
+        start: String, // formato "YYYY-MM-DD HH:mm"
+        everyNumber: String,
+        everyUnit: String
+    ): MedicationItem {
         require(name.isNotBlank())
         require(dose.isNotBlank())
         require(everyNumber.isNotBlank())
         LocalDateTime.parse(start, dtf)
+
+        // 🧠 Calcula también el epoch en milisegundos (en zona local)
+        val localDateTime = LocalDateTime.parse(start, dtf)
+        val zoneId = ZoneId.systemDefault()
+        val startEpochMs = localDateTime.atZone(zoneId).toInstant().toEpochMilli()
+
         val url = URL("$baseUrl/medications")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -210,19 +293,35 @@ object MedicationsRepository {
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("X-Debug-Uid", "dev-user")
         }
+
         val payload = JSONObject().apply {
             put("pet_id", petId)
             put("medication_name", name)
             put("dose", dose)
             put("start_of_medication", start)
+            put("start_epoch_ms", startEpochMs) // ✅ nuevo campo
             put("take_every_number", everyNumber)
             put("take_every_unit", everyUnit)
         }.toString()
+
         conn.outputStream.use { it.write(payload.toByteArray()) }
+
         val code = conn.responseCode
-        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-        if (code !in 200..299) throw RuntimeException("create medication error $code: $body")
+        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+            ?.bufferedReader()?.use { it.readText() } ?: ""
+        if (code !in 200..299)
+            throw RuntimeException("create medication error $code: $body")
+
         val obj = JSONObject(body)
+        val startStrResp = obj.optString("start_of_medication", start)
+        val everyNumResp = obj.optString("take_every_number", everyNumber)
+        val everyUnitResp = obj.optString("take_every_unit", everyUnit)
+        val lastStrResp = obj.optString("last_taken_at")
+        val totalResp = obj.optString("total_doses")
+        val nextRaw = obj.optString("next_dose")
+        val endRaw = obj.optString("end_of_supply")
+        val nextComputed = if (nextRaw.isNotBlank()) normalizeDateStr(nextRaw) else computeNext(startStrResp, lastStrResp, everyNumResp, everyUnitResp)
+        val endComputed = if (endRaw.isNotBlank()) normalizeDateStr(endRaw) else computeEnd(startStrResp, everyNumResp, everyUnitResp, totalResp)
         val item = MedicationItem(
             assignment_id = obj.optString("assignment_id"),
             medication_id = obj.optString("medication_id"),
@@ -230,17 +329,23 @@ object MedicationsRepository {
             user_id = obj.optString("user_id"),
             medication_name = obj.optString("medication_name", name),
             dose = obj.optString("dose", dose),
-            start_of_medication = obj.optString("start_of_medication", start),
-            take_every_number = obj.optString("take_every_number", everyNumber),
-            take_every_unit = obj.optString("take_every_unit", everyUnit),
-            last_taken_at = obj.optString("last_taken_at"),
-            next_dose = obj.optString("next_dose", start),
+            start_of_medication = normalizeDateStr(startStrResp),
+            take_every_number = everyNumResp,
+            take_every_unit = everyUnitResp,
+            last_taken_at = normalizeDateStr(lastStrResp),
+            next_dose = nextComputed,
             created_at = obj.optString("created_at"),
-            total_doses = obj.optString("total_doses")
+            total_doses = totalResp,
+            end_of_supply = endComputed,
+        )
+        Log.d(
+            TAG,
+            "createMedication: assignment=${item.assignment_id} start=${item.start_of_medication} next=${item.next_dose} end=${item.end_of_supply} take_every=${item.take_every_number} ${item.take_every_unit} total=${item.total_doses}"
         )
         upsert(petId, item)
         return item
     }
+
 
     suspend fun updateMedication(baseUrl: String, petId: String, assignmentId: String, name: String?, dose: String?, start: String?, everyNumber: String?, everyUnit: String?): MedicationItem {
         if (start != null) LocalDateTime.parse(start, dtf)
@@ -264,6 +369,15 @@ object MedicationsRepository {
         val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
         if (code !in 200..299) throw RuntimeException("update medication error $code: $body")
         val obj = JSONObject(body)
+        val startStrUpd = obj.optString("start_of_medication", start ?: "")
+        val everyNumUpd = obj.optString("take_every_number", everyNumber ?: "")
+        val everyUnitUpd = obj.optString("take_every_unit", everyUnit ?: "")
+        val lastStrUpd = obj.optString("last_taken_at")
+        val totalUpd = obj.optString("total_doses")
+        val nextRawUpd = obj.optString("next_dose")
+        val endRawUpd = obj.optString("end_of_supply")
+        val nextUpd = if (nextRawUpd.isNotBlank()) normalizeDateStr(nextRawUpd) else computeNext(startStrUpd, lastStrUpd, everyNumUpd, everyUnitUpd)
+        val endUpd = if (endRawUpd.isNotBlank()) normalizeDateStr(endRawUpd) else computeEnd(startStrUpd, everyNumUpd, everyUnitUpd, totalUpd)
         val item = MedicationItem(
             assignment_id = obj.optString("assignment_id", assignmentId),
             medication_id = obj.optString("medication_id"),
@@ -271,13 +385,14 @@ object MedicationsRepository {
             user_id = obj.optString("user_id"),
             medication_name = obj.optString("medication_name", name ?: ""),
             dose = obj.optString("dose", dose ?: ""),
-            start_of_medication = obj.optString("start_of_medication", start ?: ""),
-            take_every_number = obj.optString("take_every_number", everyNumber ?: ""),
-            take_every_unit = obj.optString("take_every_unit", everyUnit ?: ""),
-            last_taken_at = obj.optString("last_taken_at"),
-            next_dose = obj.optString("next_dose"),
+            start_of_medication = normalizeDateStr(startStrUpd),
+            take_every_number = everyNumUpd,
+            take_every_unit = everyUnitUpd,
+            last_taken_at = normalizeDateStr(lastStrUpd),
+            next_dose = nextUpd,
             created_at = obj.optString("created_at"),
-            total_doses = obj.optString("total_doses")
+            total_doses = totalUpd,
+            end_of_supply = endUpd
         )
         upsert(petId, item)
         return item
@@ -318,9 +433,12 @@ object MedicationsRepository {
                 setRequestProperty("Authorization", "Bearer $idToken")
             }
         }
+        val startEpochMs = LocalDateTime.parse(startOfSupply, dtf)
+            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val payload = JSONObject().apply {
             put("medication_name", name)
             put("start_of_supply", startOfSupply)
+            put("start_epoch_ms", startEpochMs)
             put("perform_every_number", everyNumber)
             put("perform_every_unit", everyUnit)
             put("dose_number", doseNumber)
