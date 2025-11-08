@@ -61,6 +61,8 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import org.json.JSONArray
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+enum class NextCardMode { Auto, Medication, Routine }
 @Composable
 fun DashboardScreen(
     onOpenHealth: () -> Unit = {},
@@ -71,7 +73,8 @@ fun DashboardScreen(
     onAddPet: () -> Unit = {},
     addPetIconResId: Int? = null,
     onOpenPetProfile: () -> Unit = {},
-    onOpenProfile: () -> Unit = {}
+    onOpenProfile: () -> Unit = {},
+    nextCardMode: NextCardMode = NextCardMode.Auto
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val ctx = LocalContext.current
@@ -119,47 +122,128 @@ fun DashboardScreen(
     }
 
     // Compute next upcoming action (top green card)
-    fun parseTime(s: String): java.time.LocalDateTime? = runCatching {
-        if (s.isBlank()) null else java.time.LocalDateTime.parse(s, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-    }.getOrNull()
+    fun parseTime(s: String): java.time.LocalDateTime? {
+        val t = s.trim()
+        if (t.isBlank()) return null
+        // Epoch seconds/millis
+        if (t.all { it.isDigit() }) {
+            val num = t.toLongOrNull()
+            if (num != null) {
+                val inst = if (num > 1_000_000_000_000L) java.time.Instant.ofEpochMilli(num) else java.time.Instant.ofEpochSecond(num)
+                return inst.atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+            }
+        }
+        // ISO instant
+        runCatching { java.time.Instant.parse(t).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime() }.getOrNull()?.let { return it }
+        // yyyy-MM-dd HH:mm
+        runCatching { java.time.LocalDateTime.parse(t, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) }.getOrNull()?.let { return it }
+        // ISO local datetime
+        return runCatching { java.time.LocalDateTime.parse(t) }.getOrNull()
+    }
+    fun formatForDisplay(raw: String): String {
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        val ldt = parseTime(raw)
+        return ldt?.format(fmt) ?: raw
+    }
     data class NextCard(val title: String, val subtitle: String)
-    val nextCard: NextCard? = run {
-        val nextMed = meds.minByOrNull { parseTime(it.next_dose) ?: java.time.LocalDateTime.MAX }
-        val nextRut = routines.minByOrNull { parseTime(it.next_activity) ?: java.time.LocalDateTime.MAX }
-        val medTime = nextMed?.let { parseTime(it.next_dose) }
-        val rutTime = nextRut?.let { parseTime(it.next_activity) }
-        when {
-            medTime != null && (rutTime == null || medTime.isBefore(rutTime)) ->
-                NextCard(title = "Next medication", subtitle = "${nextMed.medication_name} at ${nextMed.next_dose}")
-            rutTime != null ->
-                NextCard(title = "Next routine", subtitle = "${nextRut.routine_name} at ${nextRut.next_activity}")
-            else -> null
+    val nextCard: NextCard? = when (nextCardMode) {
+        NextCardMode.Auto -> run {
+            val now = java.time.LocalDateTime.now()
+            val candidates = buildList {
+                meds.forEach { m ->
+                    val t = parseTime(m.next_dose)
+                    if (t != null && !t.isBefore(now)) add(Triple("med", m.medication_name, t) to m.next_dose)
+                }
+                routines.forEach { r ->
+                    val t = parseTime(r.next_activity)
+                    if (t != null && !t.isBefore(now)) add(Triple("rut", r.routine_name, t) to r.next_activity)
+                }
+            }
+            val nearest = candidates.minByOrNull { it.first.third }
+            when (nearest?.first?.first) {
+                "med" -> NextCard(title = "Next medication", subtitle = "${nearest.first.second} at ${formatForDisplay(nearest.second)}")
+                "rut" -> NextCard(title = "Next routine", subtitle = "${nearest.first.second} at ${formatForDisplay(nearest.second)}")
+                else -> null
+            }
+        }
+        NextCardMode.Medication -> run {
+            val now = java.time.LocalDateTime.now()
+            val nextMed = meds
+                .mapNotNull { m -> parseTime(m.next_dose)?.let { it to m } }
+                .filter { it.first.isAfter(now) || it.first.isEqual(now) }
+                .minByOrNull { it.first }
+                ?.second
+            nextMed?.let { NextCard(title = "Next medication", subtitle = "${it.medication_name} at ${formatForDisplay(it.next_dose)}") }
+        }
+        NextCardMode.Routine -> run {
+            val now = java.time.LocalDateTime.now()
+            val nextRut = routines
+                .mapNotNull { r -> parseTime(r.next_activity)?.let { it to r } }
+                .filter { it.first.isAfter(now) || it.first.isEqual(now) }
+                .minByOrNull { it.first }
+                ?.second
+            nextRut?.let { NextCard(title = "Next routine", subtitle = "${it.routine_name} at ${formatForDisplay(it.next_activity)}") }
         }
     }
 
-    // Build recent created items list (bottom section)
+    // Build recent items list (bottom section). Show the CREATION date/time of the item (created_at).
     val recent: List<Activity> = run {
-        val fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-        fun parseCreated(v: String): java.time.LocalDateTime = runCatching { java.time.LocalDateTime.parse(v, fmt) }.getOrElse { java.time.LocalDateTime.MIN }
-        val medActivities = meds.filter { it.created_at.isNotBlank() }.map {
+        val fmtOut = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        fun formatAny(raw: String): String {
+            val s = raw.trim()
+            if (s.isBlank()) return s
+            // epoch millis or seconds
+            if (s.all { it.isDigit() }) {
+                val num = s.toLongOrNull()
+                if (num != null) {
+                    val inst = if (num > 1_000_000_000_000L) java.time.Instant.ofEpochMilli(num) else java.time.Instant.ofEpochSecond(num)
+                    return fmtOut.format(inst.atZone(java.time.ZoneId.systemDefault()).toLocalDateTime())
+                }
+            }
+            // ISO instant
+            runCatching {
+                val inst = java.time.Instant.parse(s)
+                return fmtOut.format(inst.atZone(java.time.ZoneId.systemDefault()).toLocalDateTime())
+            }
+            // yyyy-MM-dd HH:mm
+            runCatching {
+                val ldt = java.time.LocalDateTime.parse(s, fmtOut)
+                return fmtOut.format(ldt)
+            }
+            // ISO local datetime
+            runCatching {
+                val ldt = java.time.LocalDateTime.parse(s)
+                return fmtOut.format(ldt)
+            }
+            return s
+        }
+        fun parseForOrder(v: String): java.time.LocalDateTime = runCatching {
+            java.time.LocalDateTime.parse(v, fmtOut)
+        }.getOrElse { java.time.LocalDateTime.MIN }
+
+        val medActivities = meds.map {
+            val created = it.created_at.ifBlank { it.next_dose }
+            val displayTime = formatAny(created)
             Activity(
                 title = "Medication added",
                 subtitle = it.medication_name,
-                time = it.created_at,
+                time = displayTime,
                 icon = Icons.Default.Vaccines,
                 bg = Color(0xFFCFFAFE),
                 tint = Color(0xFF0891B2)
-            ) to parseCreated(it.created_at)
+            ) to parseForOrder(displayTime)
         }
-        val rutActivities = routines.filter { it.created_at.isNotBlank() }.map {
+        val rutActivities = routines.map {
+            val created = it.created_at.ifBlank { it.next_activity }
+            val displayTime = formatAny(created)
             Activity(
                 title = "Routine added",
                 subtitle = it.routine_name,
-                time = it.created_at,
+                time = displayTime,
                 icon = Icons.Default.Schedule,
                 bg = Color(0xFFDCFCE7),
                 tint = Color(0xFF16A34A)
-            ) to parseCreated(it.created_at)
+            ) to parseForOrder(displayTime)
         }
         medActivities.plus(rutActivities)
             .sortedByDescending { it.second }
@@ -263,7 +347,7 @@ fun DashboardScreen(
                             onOpenRoutine = onOpenRoutine,
                         )
                     }
-                    item { QuickLogSection(onAddVisit, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
+                    item { QuickLogSection(onOpenHealth, onAddMedication, onAddRoutine, onAddPet, addPetIconResId) }
                     item {
                         val petName = selectedPet?.name ?: "your pet"
                         RecentActivitySectionForPet(petName = petName, recent = recent)

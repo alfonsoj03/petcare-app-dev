@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
@@ -16,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
+
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -87,7 +91,7 @@ fun MedicationFormScreen(
     }
     val selectedPetId by SelectedPetStore.selectedPetId.collectAsState(initial = SelectedPetStore.get())
     val pets by PetsRepository.pets.collectAsState()
-    val additionalSelected = remember { mutableStateOf<MutableSet<String>>(mutableSetOf()) }
+    var additionalSelected by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     // Validators
     fun validateName(v: String): String? {
@@ -102,28 +106,21 @@ fun MedicationFormScreen(
         }
     }
     fun validateDateTime(v: String): String? {
-        val t = v.trim()
+        val t = v.trim().replace("\t", " ").replace(Regex("\\s+"), " ")
         if (t.isEmpty()) return "Required"
         val pattern = Regex("^\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}$")
         if (!pattern.matches(t)) return "Format YYYY-MM-DD HH:mm"
         return try {
-            val parts = t.split(" ")
-            val datePart = parts[0]
-            val timePart = parts[1]
-            
-            val date = LocalDate.parse(datePart)
-            val timeParts = timePart.split(":")
-            val hour = timeParts[0].toInt()
-            val minute = timeParts[1].toInt()
-            
+            val (datePart, timePart) = t.split(" ").let { parts -> parts.first() to parts.last() }
+            val (hour, minute) = timePart.split(":").let { it[0].toInt() to it[1].toInt() }
             when {
-                date.year < 1900 -> "Year must be ≥ 1900"
                 hour !in 0..23 -> "Invalid hour"
                 minute !in 0..59 -> "Invalid minute"
                 else -> {
+                    val date = LocalDate.parse(datePart)
                     val candidate = LocalDateTime.of(date, LocalTime.of(hour, minute))
-                    val now = LocalDateTime.now()
-                    if (!candidate.isAfter(now)) "Must be in the future" else null
+                    val now = LocalDateTime.now().withSecond(0).withNano(0)
+                    if (candidate.isBefore(now)) "Must be in the future" else null
                 }
             }
         } catch (e: Exception) {
@@ -242,7 +239,7 @@ fun MedicationFormScreen(
                                         doseNumber = doseValue,
                                         doseUnit = doseUnit,
                                         totalDoses = totalDoses.toInt(),
-                                        additionalPetIds = additionalSelected.value
+                                        additionalPetIds = additionalSelected
                                     )
                                     onConfirm(medName)
                                     onConfirmWithTotal(medName, totalDoses.toInt())
@@ -447,16 +444,24 @@ fun MedicationFormScreen(
                 Column(Modifier.fillMaxWidth()) {
                     val others = pets.filter { it.pet_id != (selectedPetId ?: "") }
                     others.forEach { pet ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val checked = pet.pet_id in additionalSelected.value
+                        val checked = pet.pet_id in additionalSelected
+                        val toggle: () -> Unit = {
+                            additionalSelected = if (checked) additionalSelected - pet.pet_id else additionalSelected + pet.pet_id
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = checked,
+                                    onClick = toggle,
+                                    role = Role.Checkbox
+                                )
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Checkbox(
                                 checked = checked,
-                                onCheckedChange = { isChecked ->
-                                    if (isChecked) additionalSelected.value.add(pet.pet_id)
-                                    else additionalSelected.value.remove(pet.pet_id)
-                                    // trigger recomposition
-                                    additionalSelected.value = additionalSelected.value.toMutableSet()
-                                },
+                                onCheckedChange = { toggle() },
                                 colors = CheckboxDefaults.colors(
                                     checkedColor = purple,
                                     uncheckedColor = Color(0xFF9CA3AF),
@@ -466,6 +471,7 @@ fun MedicationFormScreen(
                             Text(pet.name)
                         }
                     }
+
                     if (others.isEmpty()) {
                         Text("No other pets available", color = Color(0xFF6B7280), style = MaterialTheme.typography.bodySmall)
                     }

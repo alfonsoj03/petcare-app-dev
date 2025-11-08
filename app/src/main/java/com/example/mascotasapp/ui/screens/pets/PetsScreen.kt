@@ -56,9 +56,13 @@ import com.example.mascotasapp.data.model.Pet
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import com.example.mascotasapp.core.SelectedPetStore
+import com.example.mascotasapp.data.repository.MedicationsRepository
+import com.example.mascotasapp.data.repository.RoutinesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 
 enum class EventType { VACCINE, VET, OVERDUE }
 
@@ -120,6 +124,42 @@ fun PetsScreen(
             val firstId = pets.first().id
             SelectedPetStore.set(firstId)
         }
+    }
+
+    // Initialize Meds/Routines repositories once
+    LaunchedEffect(Unit) {
+        MedicationsRepository.init(ctx)
+        RoutinesRepository.init(ctx)
+    }
+
+    // Background refresh per pet to populate upcoming info
+    LaunchedEffect(pets) {
+        val base = ApiConfig.BASE_URL
+        pets.forEach { p ->
+            scope.launch { runCatching { MedicationsRepository.refresh(base, p.id) } }
+            scope.launch { runCatching { RoutinesRepository.refresh(base, p.id) } }
+        }
+    }
+
+    // Helpers used to parse/format event times
+    fun parseTimeFlexible(s: String): java.time.LocalDateTime? {
+        val t = s.trim()
+        if (t.isBlank()) return null
+        if (t.all { it.isDigit() }) {
+            val num = t.toLongOrNull()
+            if (num != null) {
+                val inst = if (num > 1_000_000_000_000L) java.time.Instant.ofEpochMilli(num) else java.time.Instant.ofEpochSecond(num)
+                return inst.atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+            }
+        }
+        runCatching { java.time.Instant.parse(t).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime() }.getOrNull()?.let { return it }
+        runCatching { java.time.LocalDateTime.parse(t, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) }.getOrNull()?.let { return it }
+        return runCatching { java.time.LocalDateTime.parse(t) }.getOrNull()
+    }
+
+    fun formatForDisplay(ldt: java.time.LocalDateTime?): String {
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        return ldt?.format(fmt) ?: "—"
     }
 
     Scaffold(
@@ -186,12 +226,30 @@ fun PetsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(pets, key = { it.id }) { pet ->
+                // Subscribe to meds/routines for this pet
+                val meds by remember(pet.id) { MedicationsRepository.medsFlow(pet.id) }.collectAsState(initial = emptyList())
+                val routines by remember(pet.id) { RoutinesRepository.routinesFlow(pet.id) }.collectAsState(initial = emptyList())
+                val now = remember { java.time.LocalDateTime.now() }
+                val candidate = run {
+                    val medCands = meds.mapNotNull { m -> parseTimeFlexible(m.next_dose)?.let { it to ("med" to m.medication_name) } }
+                        .filter { it.first.isAfter(now) || it.first.isEqual(now) }
+                    val rutCands = routines.mapNotNull { r -> parseTimeFlexible(r.next_activity)?.let { it to ("rut" to r.routine_name) } }
+                        .filter { it.first.isAfter(now) || it.first.isEqual(now) }
+                    (medCands + rutCands).minByOrNull { it.first }
+                }
+                val nextText = candidate?.let { c ->
+                    val label = c.second.second
+                    val whenTxt = formatForDisplay(c.first)
+                    "$label at $whenTxt"
+                } ?: "—"
+                val petDisplay = pet.copy(nextEvent = nextText, eventType = EventType.VET)
+
                 PetRowCard(
-                    pet = pet,
+                    pet = petDisplay,
                     selected = pet.id == selectedId,
                     onSelect = {
                         SelectedPetStore.set(pet.id)
-                        onSelectedPet(pet)
+                        onSelectedPet(petDisplay)
                     },
                     onEdit = { onOpenPet(pet.id) }
                 )
