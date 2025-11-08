@@ -33,7 +33,6 @@ async function getMedicationsByPetService({userId, petId}) {
   const arows = maResp.data.values || [];
   if (mrows.length <= 1) return [];
 
-  // medications columns: A medication_id, B user_id, C medication_name, D start_of_supply, E perform_every_number, F perform_every_unit, G dose_number, H dose_unit, I total_doses, J created_at
   const medById = new Map();
   for (let i = 1; i < mrows.length; i++) {
     const cols = mrows[i];
@@ -52,23 +51,80 @@ async function getMedicationsByPetService({userId, petId}) {
     });
   }
 
-  // medicationassignments columns: A assignment_id, B medication_id, C pet_id, D user_id, E assigned_at, F last_given_at, G next_supply, H created_at, I is_completed
+  // medicationassignments columns
+  // Current: A assignment_id, B medication_id, C pet_id, D user_id, E start_of_supply, F end_of_supply, G next_supply, H created_at, I is_completed
+  // Legacy variants are not expected, but we still try to map by header names.
+  const headers = Array.isArray(arows[0]) ? arows[0].map(h => String(h).trim().toLowerCase()) : [];
+  const idx = {
+    assignment_id: headers.indexOf("assignment_id"),
+    medication_id: headers.indexOf("medication_id"),
+    pet_id: headers.indexOf("pet_id"),
+    user_id: headers.indexOf("user_id"),
+    start_of_supply: headers.indexOf("start_of_supply"),
+    end_of_supply: headers.indexOf("end_of_supply"),
+    next_supply: headers.indexOf("next_supply"),
+    created_at: headers.indexOf("created_at"),
+    is_completed: headers.indexOf("is_completed"),
+  };
+  // Fallback to positional indices if header names are missing or have variants
+  const ensureIdx = (cur, def) => (cur >= 0 ? cur : def);
+  idx.assignment_id = ensureIdx(idx.assignment_id, 0);
+  idx.medication_id = ensureIdx(idx.medication_id, 1);
+  idx.pet_id = ensureIdx(idx.pet_id, 2);
+  idx.user_id = ensureIdx(idx.user_id, 3);
+  idx.start_of_supply = ensureIdx(idx.start_of_supply, 4);
+  idx.end_of_supply = ensureIdx(idx.end_of_supply, 5);
+  idx.next_supply = ensureIdx(idx.next_supply, 6);
+  idx.created_at = ensureIdx(idx.created_at, 7);
+  idx.is_completed = ensureIdx(idx.is_completed, 8);
   const out = [];
   for (let i = 1; i < arows.length; i++) {
     const cols = arows[i];
-    if (String(cols[2]) === String(petId) && String(cols[3]) === String(userId)) {
-      const medicationId = String(cols[1] || "");
+    if (String(cols[idx.pet_id]) === String(petId) && String(cols[idx.user_id]) === String(userId)) {
+      const medicationId = String(cols[idx.medication_id] || "");
       const med = medById.get(medicationId);
       if (med && med.user_id === String(userId)) {
         const doseCombined = (med.dose_number ? String(med.dose_number) : "") + (med.dose_unit ? ` ${med.dose_unit}` : "");
+        const startAssign = idx.start_of_supply >= 0 ? String(cols[idx.start_of_supply] || "") : ""; // epoch ms expected
+        const endVal = idx.end_of_supply >= 0 ? String(cols[idx.end_of_supply] || "") : "";
+        // Always compute next_dose = start_of_supply + 1 interval (ignore next_supply column for API output)
+        let nextVal = "";
+        {
+          const startMs = Number(startAssign);
+          const nInt = Number(med.take_every_number || 0);
+          const unitStr = String(med.take_every_unit || "").toLowerCase();
+          if (Number.isFinite(startMs) && startMs > 0 && Number.isFinite(nInt) && nInt > 0) {
+            const d = new Date(startMs);
+            switch (unitStr) {
+              case "hour":
+              case "hours": d.setHours(d.getHours() + nInt); break;
+              case "day":
+              case "days": d.setDate(d.getDate() + nInt); break;
+              case "week":
+              case "weeks": d.setDate(d.getDate() + 7 * nInt); break;
+              case "month":
+              case "months": d.setMonth(d.getMonth() + nInt); break;
+            }
+            nextVal = String(d.getTime());
+          }
+        }
+        logger.info("LOGUEO_BUSCADO getMedications: row match", {
+          pet_id: String(cols[idx.pet_id] || ""), medication_id: medicationId,
+          start_raw: startAssign || med.start_of_medication, end_raw: endVal, next_raw: nextVal,
+        });
+        logger.info("LOGUEO_BUSCADO getMedications: assignment row", {
+          assignment_id: String(cols[idx.assignment_id] || ""),
+          cols,
+        });
         out.push({
-          assignment_id: String(cols[0] || ""),
-          pet_id: String(cols[2] || ""),
-          user_id: String(cols[3] || ""),
-          last_taken_at: String(cols[5] || ""),      // map last_given_at -> last_taken_at
-          next_dose: String(cols[6] || ""),          // map next_supply -> next_dose
+          assignment_id: String(cols[idx.assignment_id] || ""),
+          pet_id: String(cols[idx.pet_id] || ""),
+          user_id: String(cols[idx.user_id] || ""),
+          end_of_supply: endVal,
+          next_dose: nextVal,
           dose: doseCombined,
           ...med,
+          start_of_medication: startAssign || med.start_of_medication,
         });
       }
     }
@@ -381,6 +437,26 @@ async function getRoutinesByPetService({userId, petId}) {
   const arows = raResp.data.values || [];
   if (rrows.length <= 1) return [];
 
+  const toEpochString = (v) => {
+    if (v === undefined || v === null) return "";
+    if (typeof v === "number") return String(Math.round(v));
+    const s = String(v).trim();
+    if (s === "") return "";
+    if (/^\d+(\.\d+)?$/.test(s)) return s; // numeric string
+    const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (mIso) {
+      const yyyy = Number(mIso[1]);
+      const mm = Number(mIso[2]);
+      const dd = Number(mIso[3]);
+      const HH = Number(mIso[4]);
+      const MM = Number(mIso[5]);
+      const SS = mIso[6] ? Number(mIso[6]) : 0;
+      const dtLocal = new Date(yyyy, mm - 1, dd, HH, MM, SS, 0);
+      return String(dtLocal.getTime());
+    }
+    return s;
+  };
+
   const routineById = new Map();
   // routines columns: A routine_id, B user_id, C routine_name, D start_of_activity, E perform_every_number, F perform_every_unit, G created_at
   for (let i = 1; i < rrows.length; i++) {
@@ -389,7 +465,7 @@ async function getRoutinesByPetService({userId, petId}) {
       routine_id: String(cols[0] || ""),
       user_id: String(cols[1] || ""),
       routine_name: String(cols[2] || ""),
-      start_of_activity: String(cols[3] || ""),
+      start_of_activity: toEpochString(cols[3]),
       perform_every_number: String(cols[4] || ""),
       perform_every_unit: String(cols[5] || ""),
       created_at: String(cols[6] || ""),
@@ -407,8 +483,8 @@ async function getRoutinesByPetService({userId, petId}) {
           assignment_id: String(cols[0] || ""),
           pet_id: String(cols[2] || ""),
           user_id: String(cols[3] || ""),
-          last_performed_at: String(cols[5] || ""),
-          next_activity: String(cols[6] || ""),
+          last_performed_at: toEpochString(cols[5]),
+          next_activity: toEpochString(cols[6]),
           ...routine,
         });
       }
@@ -418,72 +494,7 @@ async function getRoutinesByPetService({userId, petId}) {
   return out;
 }
 
-// GET medications joined with medicationassignments for a pet
-// medications columns: A medication_id, B user_id, C medication_name, D start_of_supply, E number, F unit, G dose_number, H dose_unit, I total_doses, J created_at
-// medicationassignments columns: A assignment_id, B medication_id, C pet_id, D user_id, E assigned_at, F last_given_at, G next_supply, H created_at, I is_completed
-async function getMedicationsByPetService({userId, petId}) {
-  const spreadsheetId = ensureSpreadsheetId();
-  const sheets = await getSheetsClient();
-
-  const [medsResp, maResp] = await Promise.all([
-    sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: "medications!A1:Z10000",
-      valueRenderOption: "UNFORMATTED_VALUE",
-      dateTimeRenderOption: "FORMATTED_STRING",
-    }),
-    sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: "medicationassignments!A1:Z10000",
-      valueRenderOption: "UNFORMATTED_VALUE",
-      dateTimeRenderOption: "FORMATTED_STRING",
-    }),
-  ]);
-
-  const mrows = medsResp.data.values || [];
-  const arows = maResp.data.values || [];
-  if (mrows.length <= 1) return [];
-
-  // Build medication map by id
-  const medById = new Map();
-  for (let i = 1; i < mrows.length; i++) {
-    const cols = mrows[i];
-    const doseNum = String(cols[6] || "");
-    const doseUnit = String(cols[7] || "");
-    medById.set(String(cols[0]), {
-      medication_id: String(cols[0] || ""),
-      user_id: String(cols[1] || ""),
-      medication_name: String(cols[2] || ""),
-      start_of_medication: String(cols[3] || ""), // start_of_supply -> start_of_medication
-      take_every_number: String(cols[4] || ""),   // number
-      take_every_unit: String(cols[5] || ""),     // unit
-      dose: [doseNum, doseUnit].filter(Boolean).join(" "),
-      created_at: String(cols[9] || ""),
-    });
-  }
-
-  const out = [];
-  for (let i = 1; i < arows.length; i++) {
-    const cols = arows[i];
-    const pid = String(cols[2] || "");
-    const uid = String(cols[3] || "");
-    if (pid === String(petId) && uid === String(userId)) {
-      const med = medById.get(String(cols[1]));
-      if (med && med.user_id === String(userId)) {
-        out.push({
-          assignment_id: String(cols[0] || ""),
-          pet_id: pid,
-          user_id: uid,
-          last_taken_at: String(cols[5] || ""),   // last_given_at -> last_taken_at
-          next_dose: String(cols[6] || ""),       // next_supply -> next_dose
-          ...med,
-        });
-      }
-    }
-  }
-
-  return out;
-}
+ 
 
 async function updateRoutineService({userId, body}) {
   const routineId = required(body.routine_id || body.id, "routine_id");
@@ -504,7 +515,13 @@ async function updateRoutineService({userId, body}) {
   if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || HH < 0 || HH > 23 || MM < 0 || MM > 59) {
     const e = new Error("Invalid date/time values"); e.status = 400; throw e;
   }
-  const startISO = new Date(Date.UTC(yyyy, mm - 1, dd, HH, MM, 0, 0)).toISOString();
+  // Treat provided start as a naive local time; operate in UTC to avoid server TZ shifts
+  function pad2(v) { return String(v).padStart(2, "0"); }
+  function fmtUtc(dt) {
+    return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())} ${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`;
+  }
+  const startUtc = new Date(Date.UTC(yyyy, mm - 1, dd, HH, MM, 0, 0));
+  const startLocalStr = fmtUtc(startUtc); // keep the same string the user entered (no TZ offset)
 
   const everyNumRaw = required(body.perform_every_number, "perform_every_number");
   const n = Number(everyNumRaw);
@@ -855,7 +872,7 @@ async function performMedicationService({userId, body}) {
     e.status = 404;
     throw e;
   }
-  // columns: A assignment_id, B medication_id, C pet_id, D user_id, E assigned_at, F last_given_at, G next_supply, H created_at, I is_completed
+  // columns (current): A assignment_id, B medication_id, C pet_id, D user_id, E start_of_supply, F end_of_supply, G next_supply, H created_at, I is_completed
   let foundIndex = -1;
   let assignmentId = "";
   for (let i = 1; i < arows.length; i++) {
@@ -877,9 +894,9 @@ async function performMedicationService({userId, body}) {
   const rowNumber = foundIndex + 1;
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `medicationassignments!F${rowNumber}:G${rowNumber}`,
+    range: `medicationassignments!G${rowNumber}:G${rowNumber}`,
     valueInputOption: "USER_ENTERED",
-    requestBody: {values: [[givenAt, nextSupply]]},
+    requestBody: {values: [[nextSupply]]},
   });
 
   // Activity log
@@ -905,160 +922,188 @@ async function performMedicationService({userId, body}) {
   return {assignment_id: assignmentId, last_given_at: givenAt, next_supply: nextSupply, updated_at: now};
 }
 
-async function createMedicationService({userId, body}) {
+async function createMedicationService({ userId, body }) {
   const rawName = required(body.medication_name || body.title || body.name, "medication_name");
   const medicationName = String(rawName).trim();
   const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ'., ]+$/;
   if (medicationName.length < 2 || medicationName.length > 50 || !nameRegex.test(medicationName)) {
-    const e = new Error("Invalid medication_name"); e.status = 400; throw e;
+    const e = new Error("Invalid medication_name");
+    e.status = 400;
+    throw e;
   }
 
-  const startInput = required(body.start_of_supply || body.start_of_activity, "start_of_supply");
-  const startStr = String(startInput).trim();
-  const dtMatch = startStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
-  if (!dtMatch) {
-    const e = new Error("start_of_supply must be in YYYY-MM-DD HH:mm format"); e.status = 400; throw e;
+  // 🔹 Prefer client-provided epoch (local user time). Fallback to parsing string.
+  let startEpochMs = 0;
+  let startStr = "";
+  const candidateEpoch = Number(body.start_epoch_ms || 0);
+  if (Number.isFinite(candidateEpoch) && candidateEpoch > 0) {
+    startEpochMs = Math.trunc(candidateEpoch);
+    startStr = String(body.start_of_supply || body.start_of_activity || "");
+  } else {
+    const startInput = required(body.start_of_supply || body.start_of_activity, "start_of_supply");
+    startStr = String(startInput).trim();
+    const dtMatch = startStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
+    if (!dtMatch) {
+      const e = new Error("start_of_supply must be in YYYY-MM-DD HH:mm format");
+      e.status = 400;
+      throw e;
+    }
+    const yyyy = parseInt(dtMatch[1], 10);
+    const mm = parseInt(dtMatch[2], 10);
+    const dd = parseInt(dtMatch[3], 10);
+    const HH = parseInt(dtMatch[4], 10);
+    const MM = parseInt(dtMatch[5], 10);
+    const startDate = new Date(yyyy, mm - 1, dd, HH, MM, 0, 0);
+    startEpochMs = startDate.getTime();
   }
-  const yyyy = parseInt(dtMatch[1], 10);
-  const mm = parseInt(dtMatch[2], 10);
-  const dd = parseInt(dtMatch[3], 10);
-  const HH = parseInt(dtMatch[4], 10);
-  const MM = parseInt(dtMatch[5], 10);
-  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || HH < 0 || HH > 23 || MM < 0 || MM > 59) {
-    const e = new Error("Invalid date/time values"); e.status = 400; throw e;
-  }
-  const startISO = new Date(Date.UTC(yyyy, mm - 1, dd, HH, MM, 0, 0)).toISOString();
 
+  // 🔹 Frequency validation
   const everyNumRaw = required(body.perform_every_number, "perform_every_number");
   const n = Number(everyNumRaw);
   if (!Number.isInteger(n) || n <= 0) {
-    const e = new Error("perform_every_number must be a positive integer"); e.status = 400; throw e;
+    const e = new Error("perform_every_number must be a positive integer");
+    e.status = 400;
+    throw e;
   }
+
   const everyUnitRaw = required(body.perform_every_unit, "perform_every_unit");
   const unit = String(everyUnitRaw || "").toLowerCase();
   const allowedUnits = new Set(["hour", "hours", "day", "days", "week", "weeks", "month", "months"]);
   if (!allowedUnits.has(unit)) {
-    const e = new Error("perform_every_unit must be one of hours|days|weeks|months"); e.status = 400; throw e;
-  }
-
-  const doseValueRaw = required(body.dose_number || body.dose_value, "dose_number");
-  const doseStr = String(doseValueRaw).trim();
-  if (!/^\d+(\.\d{1,2})?$/.test(doseStr)) {
-    const e = new Error("dose_number must be > 0 with up to 2 decimals");
+    const e = new Error("perform_every_unit must be one of hours|days|weeks|months");
     e.status = 400;
     throw e;
   }
-  const doseNumber = Number(doseStr);
+
+  // 🔹 Dose validation
+  const doseValueRaw = required(body.dose_number || body.dose_value, "dose_number");
+  const doseNumber = Number(String(doseValueRaw).trim());
   if (!(doseNumber > 0)) {
     const e = new Error("dose_number must be > 0");
     e.status = 400;
     throw e;
   }
   const doseUnit = required(body.dose_unit, "dose_unit");
-  const allowedDoseUnits = new Set(["mg", "ml", "g", "drops", "tablet"]);
-  if (!allowedDoseUnits.has(String(doseUnit))) {
-    const e = new Error("dose_unit must be one of mg|ml|g|drops|tablet"); e.status = 400; throw e;
+
+  // 🔹 Interval iteration (calendar-aware in local time to handle DST/months)
+  const totalDoses = Number(required(body.total_doses, "total_doses"));
+  const addIntervalLocalEpoch = (baseEpochMs, number, unitStr) => {
+    const d = new Date(baseEpochMs);
+    const u = String(unitStr || "").toLowerCase();
+    switch (u) {
+      case "hour":
+      case "hours":
+        d.setHours(d.getHours() + number);
+        break;
+      case "day":
+      case "days":
+        d.setDate(d.getDate() + number);
+        break;
+      case "week":
+      case "weeks":
+        d.setDate(d.getDate() + 7 * number);
+        break;
+      case "month":
+      case "months":
+        d.setMonth(d.getMonth() + number);
+        break;
+      default:
+        throw Object.assign(new Error("perform_every_unit must be one of hours|days|weeks|months"), {status: 400});
+    }
+    return d.getTime();
+  };
+  // Próxima dosis = una iteración desde el inicio
+  const nextDoseEpoch = addIntervalLocalEpoch(startEpochMs, n, unit);
+  // Fin de suministro: iterar 'totalDoses' veces desde el inicio
+  let endEpoch = startEpochMs;
+  for (let i = 0; i < totalDoses; i++) {
+    endEpoch = addIntervalLocalEpoch(endEpoch, n, unit);
   }
 
+  logger.info("createMedication: computed times", {
+    user_id: userId,
+    medication_name: medicationName,
+    start_input: startStr,
+    start_epoch_ms: startEpochMs,
+    start_local: new Date(startEpochMs).toString(),
+    n,
+    unit,
+    next_epoch_ms: nextDoseEpoch,
+    next_local: new Date(nextDoseEpoch).toString(),
+    total_doses: totalDoses,
+    end_epoch_ms: endEpoch,
+    end_local: new Date(endEpoch).toString(),
+  });
+
   const spreadsheetId = ensureSpreadsheetId();
-  const now = isoNow();
+  const now = Date.now();
   const medicationId = admin.firestore().collection("_ids").doc().id;
-  const nextSupply = addIntervalISO(startISO, n, unit);
 
   const sheets = await getSheetsClient();
 
-  // medications sheet (updated): medication_id, user_id, medication_name, start_of_supply, perform_every_number, perform_every_unit, dose_number, dose_unit, total_doses, created_at
-  const totalDosesRaw = required(body.total_doses, "total_doses");
-  const totalDoses = Number(String(totalDosesRaw).trim());
-  if (!Number.isInteger(totalDoses) || totalDoses <= 0) {
-    const e = new Error("total_doses must be a positive integer"); e.status = 400; throw e;
-  }
+  // 🔹 Medications sheet
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: "medications!A1",
-    valueInputOption: "USER_ENTERED",
+    valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
-    requestBody: {values: [[
-      medicationId,
-      userId,
-      medicationName,
-      startISO,
-      String(n),
-      String(unit),
-      String(doseNumber),
-      String(doseUnit),
-      String(totalDoses),
-      now,
-    ]]},
+    requestBody: {
+      values: [[
+        medicationId,
+        userId,
+        medicationName,
+        startEpochMs,
+        n,
+        unit,
+        doseNumber,
+        doseUnit,
+        totalDoses,
+        now
+      ]]
+    },
   });
 
-  // medicationassignments if assign_to_pets provided
+  // 🔹 Assignments (current schema: E start_of_supply, F end_of_supply, G next_supply, H created_at, I is_completed)
   const petIds = Array.isArray(body.assign_to_pets) ? body.assign_to_pets.map(String) : [];
   if (petIds.length > 0) {
     const rows = petIds.map(pid => [
-      admin.firestore().collection("_ids").doc().id,
-      medicationId,
-      pid,
-      userId,
-      now,
-      "",
-      nextSupply,
-      now,
-      "false",
+      admin.firestore().collection("_ids").doc().id, // A assignment_id
+      medicationId,                                   // B medication_id
+      pid,                                            // C pet_id
+      userId,                                         // D user_id
+      startEpochMs,                                   // E start_of_supply
+      endEpoch,                                       // F end_of_supply
+      nextDoseEpoch,                                  // G next_supply
+      now,                                            // H created_at
+      "false",                                       // I is_completed
     ]);
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: "medicationassignments!A1",
-      valueInputOption: "USER_ENTERED",
+      valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS",
-      requestBody: {values: rows},
+      requestBody: { values: rows },
     });
   }
-
-  // Activity log
-  const activityId = admin.firestore().collection("_ids").doc().id;
-  const details = JSON.stringify({
-    medication_name: medicationName,
-    start_of_supply: startISO,
-    perform_every_number: n,
-    perform_every_unit: unit,
-    dose_number: doseNumber,
-    dose_unit: doseUnit,
-    total_doses: totalDoses,
-    assign_to_pets: petIds,
-  });
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: "activitylog!A1",
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: {values: [[
-      activityId,
-      userId,
-      "CREATE_MEDICATION",
-      "medications",
-      medicationId,
-      now,
-      details,
-    ]]},
-  });
 
   return {
     medication: {
       medication_id: medicationId,
       user_id: userId,
       medication_name: medicationName,
-      start_of_supply: startISO,
+      start_of_supply: startEpochMs,
       perform_every_number: n,
       perform_every_unit: unit,
       dose_number: doseNumber,
       dose_unit: doseUnit,
       total_doses: totalDoses,
+      next_dose: nextDoseEpoch,
+      end_of_supply: endEpoch,
       created_at: now,
     },
-    assignments_created: petIds.length,
   };
 }
+
 
 function ensureSpreadsheetId() {
   const spreadsheetId = process.env.SPREADSHEET_ID;
@@ -1519,8 +1564,8 @@ async function createRoutineService({userId, body}) {
   }
 
   const startInput = required(body.start_of_activity, "start_of_activity");
-  // Expecting format: YYYY-MM-DD HH:mm (24h)
   const startStr = String(startInput).trim();
+  // Validate the textual format (still required as fallback/backwards compat)
   const dtMatch = startStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
   if (!dtMatch) {
     const e = new Error("start_of_activity must be in YYYY-MM-DD HH:mm format"); e.status = 400; throw e;
@@ -1533,14 +1578,43 @@ async function createRoutineService({userId, body}) {
   if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || HH < 0 || HH > 23 || MM < 0 || MM > 59) {
     const e = new Error("Invalid date/time values"); e.status = 400; throw e;
   }
-  const startISO = new Date(Date.UTC(yyyy, mm - 1, dd, HH, MM, 0, 0)).toISOString();
 
+  // ---------- PRIORIDAD: usar epoch que mande el cliente -------------
+  const startEpochMsFromClient = Number(body.start_epoch_ms || 0);
+  // clientNowEpochMs es opcional, si viene lo usamos para comparaciones
+  const clientNowEpochMs = Number(body.client_now_epoch_ms || 0);
+
+  // Helper: formateo local sin zona (YYYY-MM-DD HH:mm)
+  const pad = (x) => String(x).padStart(2, "0");
+  const formatLocal = (d) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  let startEpochMs;
+  let startLocalStr;
+  let startISO;
+
+  if (Number.isFinite(startEpochMsFromClient) && startEpochMsFromClient > 0) {
+    // Si el cliente envía epoch, lo usamos como fuente de la verdad
+    startEpochMs = Math.floor(startEpochMsFromClient);
+    const d = new Date(startEpochMs);
+    startLocalStr = formatLocal(d);
+    startISO = d.toISOString();
+    logger.info(`[createRoutineService] Using client epoch start_epoch_ms=${startEpochMs} -> local='${startLocalStr}' iso='${startISO}'`);
+  } else {
+    // Si no viene epoch, parseamos el startStr **como hora local del cliente** (naive)
+    const dLocal = new Date(yyyy, mm - 1, dd, HH, MM, 0, 0); // local-naive
+    startEpochMs = dLocal.getTime();
+    startLocalStr = formatLocal(dLocal);
+    startISO = new Date(startEpochMs).toISOString();
+    logger.info(`[createRoutineService] No client epoch. Parsed startStr='${startStr}' -> epoch=${startEpochMs} local='${startLocalStr}' iso='${startISO}'`);
+  }
+
+  // Validación de intervalos
   const everyNumRaw = required(body.perform_every_number, "perform_every_number");
   const n = Number(everyNumRaw);
   if (!Number.isInteger(n) || n <= 0) {
     const e = new Error("perform_every_number must be a positive integer"); e.status = 400; throw e;
   }
-
   const everyUnitRaw = required(body.perform_every_unit, "perform_every_unit");
   const unit = String(everyUnitRaw || "").toLowerCase();
   const allowedUnits = new Set(["hour", "hours", "day", "days", "week", "weeks", "month", "months"]);
@@ -1554,21 +1628,26 @@ async function createRoutineService({userId, body}) {
   const now = isoNow();
   const routineId = admin.firestore().collection("_ids").doc().id;
   const clientNow = body.client_now ? String(body.client_now).trim() : "";
-  const startEpochMs = Number(body.start_epoch_ms || 0);
-  const clientNowEpochMs = Number(body.client_now_epoch_ms || 0);
-  // Usamos la fecha local original (YYYY-MM-DD HH:mm) para cálculos neutros de zona,
-  // y cuando están disponibles epoch del cliente, los priorizamos para evitar desfases.
+
+  // Llamamos a calculateNextAndLast: le pasamos la representación local (startLocalStr) Y el epoch
+  // Asumimos que calculateNextAndLast prioriza el epoch si se le pasa (si no: ajusta esa función también)
   const { last_performed_at, next_activity } = calculateNextAndLast(
-    startStr,
+    startLocalStr, // texto local (fallback)
     n,
     unit,
-    clientNow,
-    startEpochMs,
-    clientNowEpochMs
+    clientNow,           // clientNow string fallback (opcional)
+    startEpochMs,        // start epoch (preferido)
+    clientNowEpochMs     // client now epoch (opcional)
   );
+
+  // LOG final de chequeo
+  logger.info(`[createRoutineService] final: routineId=${routineId}, startEpochMs=${startEpochMs}, startLocal='${startLocalStr}', next='${next_activity}', last='${last_performed_at}', clientNowEpochMs=${clientNowEpochMs}`);
 
   const sheets = await getSheetsClient();
 
+  // Guardamos EN RUTINES: usamos el ISO (para compatibilidad histórica),
+  // pero dejamos la assignment con los valores locales (last/next) tal como antes.
+  // Si quieres que también routines.D sea local string en vez de ISO, cambia String(startISO) por startLocalStr.
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: "routines!A1",
@@ -1578,7 +1657,7 @@ async function createRoutineService({userId, body}) {
       routineId,
       userId,
       routineName,
-      String(startISO),
+      String(startISO), // mantengo ISO para backwards compat; si prefieres local: use startLocalStr
       String(n),
       String(unit),
       now,
@@ -1640,6 +1719,14 @@ async function createRoutineService({userId, body}) {
       details,
     ]]},
   });
+
+  logger.info("Medication time debug", {
+  input: startStr,
+  parsed_epoch: startEpochMs,
+  local_str: new Date(startEpochMs).toString(),
+  iso_str: new Date(startEpochMs).toISOString(),
+});
+
 
   return {
     routine: {
@@ -1728,7 +1815,6 @@ module.exports = {
   updateRoutineService,
   createRoutineService,
   createMedicationService,
-  createVisitService,
   performMedicationService,
   performRoutineService,
   getPetNextEventsService,
@@ -1736,165 +1822,3 @@ module.exports = {
   deleteRoutineService,
   deleteMedicationService,
 };
-
-async function createVisitService({userId, body}) {
-  const petId = required(body.pet_id, "pet_id");
-
-  // Visit Type (required, from predefined list)
-  const allowedVisitTypes = new Set(["Routine Checkup", "Vaccination", "Emergency", "Surgery", "Follow-up", "Other"]);
-  const visitTypeInput = required(body.visit_type || body.event_name || body.title || body.name, "visit_type");
-  const visitType = String(visitTypeInput).trim();
-  if (!allowedVisitTypes.has(visitType)) {
-    const e = new Error("visit_type must be one of Routine Checkup|Vaccination|Emergency|Surgery|Follow-up|Other"); e.status = 400; throw e;
-  }
-
-  // Event name will mirror the visit type (for readability in healthevents)
-  const eventName = visitType;
-
-  // Expecting format: YYYY-MM-DD HH:mm (24h) like other services
-  const startInput = required(body.start_of_activity, "start_of_activity");
-  const startStr = String(startInput).trim();
-  const dtMatch = startStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
-  if (!dtMatch) {
-    const e = new Error("start_of_activity must be in YYYY-MM-DD HH:mm format"); e.status = 400; throw e;
-  }
-  const yyyy = parseInt(dtMatch[1], 10);
-  const mm = parseInt(dtMatch[2], 10);
-  const dd = parseInt(dtMatch[3], 10);
-  const HH = parseInt(dtMatch[4], 10);
-  const MM = parseInt(dtMatch[5], 10);
-  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || HH < 0 || HH > 23 || MM < 0 || MM > 59) {
-    const e = new Error("Invalid date/time values"); e.status = 400; throw e;
-  }
-  const startISO = new Date(Date.UTC(yyyy, mm - 1, dd, HH, MM, 0, 0)).toISOString();
-
-  // Optional recurrence
-  let n = "";
-  let unit = "";
-  let nextActivity = "";
-  if (body.perform_every_number !== undefined && body.perform_every_unit !== undefined) {
-    const nRaw = String(body.perform_every_number).trim();
-    if (!/^[0-9]+$/.test(nRaw) || parseInt(nRaw, 10) <= 0) {
-      const e = new Error("perform_every_number must be a positive integer"); e.status = 400; throw e;
-    }
-    n = Number(nRaw);
-    const unitRaw = String(body.perform_every_unit || "").toLowerCase();
-    const allowedUnits = new Set(["hour", "hours", "day", "days", "week", "weeks", "month", "months"]);
-    if (!allowedUnits.has(unitRaw)) {
-      const e = new Error("perform_every_unit must be one of hours|days|weeks|months"); e.status = 400; throw e;
-    }
-    unit = unitRaw;
-    nextActivity = addIntervalISO(startISO, n, unit);
-  }
-
-  // Clinic / Location (required)
-  const clinicRaw = required(body.clinic || body.location, "clinic");
-  const clinic = String(clinicRaw).trim();
-  if (clinic.length < 2 || clinic.length > 100) {
-    const e = new Error("clinic length must be 2-100");
-    e.status = 400;
-    throw e;
-  }
-  const clinicRegex = /^[A-Za-z0-9 .`,]+$/;
-  if (!clinicRegex.test(clinic)) {
-    const e = new Error("clinic contains invalid characters");
-    e.status = 400;
-    throw e;
-  }
-
-  // Veterinarian (optional)
-  const vetRaw = body.veterinarian || body.vet || "";
-  const veterinarian = String(vetRaw).trim();
-  if (veterinarian) {
-    if (veterinarian.length < 2 || veterinarian.length > 100) {
-      const e = new Error("veterinarian length must be 2-100");
-      e.status = 400;
-      throw e;
-    }
-    const vetRegex = /^[A-Za-z '.]+$/;
-    if (!vetRegex.test(veterinarian)) {
-      const e = new Error("veterinarian contains invalid characters");
-      e.status = 400;
-      throw e;
-    }
-  }
-
-  // Notes (optional)
-  const notes = body.notes ? String(body.notes).trim() : "";
-  if (notes.length > 500) {
-    const e = new Error("notes too long");
-    e.status = 400;
-    throw e;
-  }
-
-  const spreadsheetId = ensureSpreadsheetId();
-  const sheets = await getSheetsClient();
-  const now = isoNow();
-  const healthId = admin.firestore().collection("_ids").doc().id;
-  const eventType = "vet_visit";
-
-  // healthevents sheet columns:
-  // health_id, pet_id, user_id, event_type, event_name, start_of_activity, perform_every_number, perform_every_unit, next_activity, notes, created_at
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: "healthevents!A1",
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: {values: [[
-      healthId,
-      petId,
-      userId,
-      eventType,
-      eventName,
-      startISO,
-      n === "" ? "" : String(n),
-      unit === "" ? "" : String(unit),
-      nextActivity,
-      notes,
-      now,
-    ]]},
-  });
-
-  // Activity log
-  const activityId = admin.firestore().collection("_ids").doc().id;
-  const details = JSON.stringify({
-    event_type: eventType,
-    event_name: eventName,
-    start_of_activity: startISO,
-    perform_every_number: n,
-    perform_every_unit: unit,
-    next_activity: nextActivity,
-    clinic,
-    veterinarian,
-    notes,
-  });
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: "activitylog!A1",
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: {values: [[
-      activityId,
-      userId,
-      "CREATE_HEALTHEVENT",
-      "healthevents",
-      healthId,
-      now,
-      details,
-    ]]},
-  });
-
-  return {
-    health_id: healthId,
-    pet_id: petId,
-    user_id: userId,
-    event_type: eventType,
-    event_name: eventName,
-    start_of_activity: startISO,
-    perform_every_number: n,
-    perform_every_unit: unit,
-    next_activity: nextActivity,
-    notes,
-    created_at: now,
-  };
-}

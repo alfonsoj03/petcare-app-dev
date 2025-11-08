@@ -380,41 +380,6 @@ exports.performRoutine = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, as
   }
 });
 
-// POST /visits — create a vet visit in healthevents
-exports.createVisit = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
-  try {
-    if (req.method !== "POST") {
-      return res.status(405).json({error: "Method Not Allowed"});
-    }
-
-    // Emulator bypass: if ALLOW_INSECURE_EMULATOR=1, allow X-Debug-Uid header
-    let userId;
-    const allowBypass = process.env.ALLOW_INSECURE_EMULATOR === "1";
-    if (allowBypass) {
-      userId = (req.headers["x-debug-uid"] || req.headers["X-Debug-Uid"] || "dev-user") + "";
-    } else {
-      const token = bearer(req);
-      if (!token) return res.status(401).json({error: "Missing Bearer token"});
-      let decoded;
-      try {
-        decoded = await admin.auth().verifyIdToken(token);
-      } catch (err) {
-        logger.error("Auth verification failed", err);
-        return res.status(401).json({error: "Invalid token"});
-      }
-      userId = decoded.uid;
-    }
-
-    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const result = await createVisitService({userId, body});
-    return res.status(201).json(result);
-  } catch (err) {
-    const code = err.status || 500;
-    logger.error("createVisit failed", err);
-    return res.status(code).json({error: err.message || "Internal Error"});
-  }
-});
-
 // POST /medications
 exports.createMedication = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
