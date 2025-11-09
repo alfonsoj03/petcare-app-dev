@@ -242,7 +242,27 @@ fun PetsScreen(
                     val whenTxt = formatForDisplay(c.first)
                     "$label at $whenTxt"
                 } ?: "—"
-                val petDisplay = pet.copy(nextEvent = nextText, eventType = EventType.VET)
+                // Determine overdue medication (any next_dose strictly before now)
+                val overdueCandidate = meds
+                    .mapNotNull { m -> parseTimeFlexible(m.next_dose)?.let { it to m.medication_name } }
+                    .filter { it.first.isBefore(now) }
+                    .minByOrNull { it.first }
+
+                val petDisplay = if (overdueCandidate != null) {
+                    val label = overdueCandidate.second
+                    val whenTxt = formatForDisplay(overdueCandidate.first)
+                    pet.copy(
+                        upToDate = false,
+                        nextEvent = "$label atrasado desde $whenTxt",
+                        eventType = EventType.OVERDUE
+                    )
+                } else {
+                    pet.copy(
+                        upToDate = true,
+                        nextEvent = nextText,
+                        eventType = EventType.VET
+                    )
+                }
 
                 PetRowCard(
                     pet = petDisplay,

@@ -241,8 +241,7 @@ fun MedicationFormScreen(
                                         totalDoses = totalDoses.toInt(),
                                         additionalPetIds = additionalSelected
                                     )
-                                    onConfirm(medName)
-                                    onConfirmWithTotal(medName, totalDoses.toInt())
+                                    // Do not navigate immediately; wait for ViewModel to finish and emit navigationEvent
                                 }
                             },
                             modifier = Modifier
