@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -66,25 +68,31 @@ object MedicationsRepository {
 
     suspend fun refresh(baseUrl: String, petId: String) {
         Log.d(TAG, "refresh: start for pet=$petId baseUrl=$baseUrl")
-        val auth = FirebaseAuth.getInstance()
-        if (auth.currentUser == null) {
-            Log.d(TAG, "refresh: signing in anonymously")
-            Tasks.await(auth.signInAnonymously())
-        }
-        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
-        val url = URL("$baseUrl/getMedications?pet_id=$petId")
-        val conn = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            setRequestProperty("X-Debug-Uid", "dev-user")
-            if (!idToken.isNullOrBlank()) {
-                setRequestProperty("Authorization", "Bearer $idToken")
+        val resp: String = withContext(Dispatchers.IO) {
+            val auth = FirebaseAuth.getInstance()
+            if (auth.currentUser == null) {
+                Log.d(TAG, "refresh: signing in anonymously")
+                Tasks.await(auth.signInAnonymously())
+            }
+            val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+            val url = URL("$baseUrl/getMedications?pet_id=$petId")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("X-Debug-Uid", "dev-user")
+                if (!idToken.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $idToken")
+                }
+            }
+            val code = conn.responseCode
+            if (code in 200..299) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                val err = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                throw RuntimeException("refresh medications error $code: $err")
             }
         }
-        val code = conn.responseCode
-        if (code in 200..299) {
-            val resp = conn.inputStream.bufferedReader().use { it.readText() }
-            Log.d(TAG, "refresh: http 200, bodyLength=${resp.length}")
-            val arr = JSONArray(resp)
+        Log.d(TAG, "refresh: http 200, bodyLength=${resp.length}")
+        val arr = JSONArray(resp)
             val list = parseJsonArray(arr).sortedBy { parseDate(it.next_dose) }
             Log.d(TAG, "refresh: parsed ${list.size} items for pet=$petId")
             list.forEach {
@@ -97,11 +105,6 @@ object MedicationsRepository {
             flow.value = list
             Log.d(TAG, "refresh: flow updated size=${flow.value.size} for pet=$petId")
             saveCache(petId, JSONArray(list.map { toJson(it) }).toString())
-        } else {
-            val err = conn.errorStream?.bufferedReader()?.use { it.readText() }
-            Log.e(TAG, "refresh: error code=$code err=${err?.take(500)}")
-            throw RuntimeException("refresh medications error $code: $err")
-        }
     }
 
     suspend fun upsert(petId: String, item: MedicationItem) {
@@ -173,7 +176,7 @@ object MedicationsRepository {
             val nextStr = o.optString("next_dose")
             val endStr = o.optString("end_of_supply")
             val nextFinal = if (nextStr.isNotBlank()) normalizeDateStr(nextStr) else computeNext(startStr, lastStr, everyNum, everyUnit)
-            val endFinal = if (endStr.isNotBlank()) normalizeDateStr(endStr) else computeEnd(startStr, everyNum, everyUnit, o.optString("total_doses"))
+            val endFinal = normalizeDateStr(endStr)
             out.add(
                 MedicationItem(
                     assignment_id = o.optString("assignment_id"),
@@ -321,7 +324,7 @@ object MedicationsRepository {
         val nextRaw = obj.optString("next_dose")
         val endRaw = obj.optString("end_of_supply")
         val nextComputed = if (nextRaw.isNotBlank()) normalizeDateStr(nextRaw) else computeNext(startStrResp, lastStrResp, everyNumResp, everyUnitResp)
-        val endComputed = if (endRaw.isNotBlank()) normalizeDateStr(endRaw) else computeEnd(startStrResp, everyNumResp, everyUnitResp, totalResp)
+        val endComputed = normalizeDateStr(endRaw)
         val item = MedicationItem(
             assignment_id = obj.optString("assignment_id"),
             medication_id = obj.optString("medication_id"),
@@ -377,7 +380,7 @@ object MedicationsRepository {
         val nextRawUpd = obj.optString("next_dose")
         val endRawUpd = obj.optString("end_of_supply")
         val nextUpd = if (nextRawUpd.isNotBlank()) normalizeDateStr(nextRawUpd) else computeNext(startStrUpd, lastStrUpd, everyNumUpd, everyUnitUpd)
-        val endUpd = if (endRawUpd.isNotBlank()) normalizeDateStr(endRawUpd) else computeEnd(startStrUpd, everyNumUpd, everyUnitUpd, totalUpd)
+        val endUpd = normalizeDateStr(endRawUpd)
         val item = MedicationItem(
             assignment_id = obj.optString("assignment_id", assignmentId),
             medication_id = obj.optString("medication_id"),
@@ -453,27 +456,26 @@ object MedicationsRepository {
         // caller will refresh
     }
 
-    suspend fun performMedication(baseUrl: String, medicationId: String, petId: String, givenAtIso: String) {
-        val auth = FirebaseAuth.getInstance()
-        if (auth.currentUser == null) {
-            Tasks.await(auth.signInAnonymously())
+    suspend fun performMedication(baseUrl: String, medicationId: String, petId: String) {
+        withContext(Dispatchers.IO) {
+            val auth = FirebaseAuth.getInstance()
+            if (auth.currentUser == null) {
+                Tasks.await(auth.signInAnonymously())
+            }
+            val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
+            val url = URL("$baseUrl/performMedication?medication_id=$medicationId")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("X-Debug-Uid", "dev-user")
+                if (!idToken.isNullOrBlank()) setRequestProperty("Authorization", "Bearer $idToken")
+            }
+            val payload = JSONObject().apply { put("pet_id", petId) }.toString()
+            conn.outputStream.use { it.write(payload.toByteArray()) }
+            val code = conn.responseCode
+            val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+            if (code !in 200..299) throw RuntimeException("perform medication error $code: $body")
         }
-        val idToken = Tasks.await(auth.currentUser!!.getIdToken(true)).token
-        val url = URL("$baseUrl/performMedication?medication_id=$medicationId")
-        val conn = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("X-Debug-Uid", "dev-user")
-            if (!idToken.isNullOrBlank()) setRequestProperty("Authorization", "Bearer $idToken")
-        }
-        val payload = JSONObject().apply {
-            put("pet_id", petId)
-            put("given_at", givenAtIso)
-        }.toString()
-        conn.outputStream.use { it.write(payload.toByteArray()) }
-        val code = conn.responseCode
-        val body = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-        if (code !in 200..299) throw RuntimeException("perform medication error $code: $body")
     }
 }

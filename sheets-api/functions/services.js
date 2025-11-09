@@ -820,14 +820,6 @@ async function getPetNextEventsService({userId, petId, limit}) {
 async function performMedicationService({userId, body}) {
   const medicationId = required(body.medication_id || body.med_id || body.id, "medication_id");
   const petId = required(body.pet_id, "pet_id");
-  const givenAtRaw = required(body.given_at, "given_at");
-  const givenAt = String(givenAtRaw).trim();
-  const givenDate = new Date(givenAt);
-  if (Number.isNaN(givenDate.getTime())) {
-    const e = new Error("given_at must be a valid ISO datetime");
-    e.status = 400;
-    throw e;
-  }
 
   const spreadsheetId = ensureSpreadsheetId();
   const sheets = await getSheetsClient();
@@ -889,20 +881,40 @@ async function performMedicationService({userId, body}) {
     throw e;
   }
 
-  const nextSupply = addIntervalISO(givenAt, everyNum, everyUnit);
+  // Read current next_supply (G). If missing, derive as start_of_supply (E) + one step.
+  const row = arows[foundIndex];
+  const startMsRaw = row[4];
+  const nextMsRaw = row[6];
+  const startMs = Number(startMsRaw);
+  const nFromG = Number(nextMsRaw);
+
+  const hourMs = 60 * 60 * 1000;
+  const dayMs = 24 * hourMs;
+  const weekMs = 7 * dayMs;
+  const unitLower = String(everyUnit || "").toLowerCase();
+  const nInt = Number(everyNum) | 0;
+  const stepMs = (unitLower === "hour" || unitLower === "hours") ? nInt * hourMs
+                : (unitLower === "day" || unitLower === "days") ? nInt * dayMs
+                : (unitLower === "week" || unitLower === "weeks") ? nInt * weekMs
+                : /* month(s) */ nInt * 30 * dayMs;
+
+  const baseNextMs = Number.isFinite(nFromG) ? nFromG : (Number.isFinite(startMs) ? (startMs + stepMs) : NaN);
+  if (!Number.isFinite(baseNextMs)) { const e = new Error("Cannot derive next_supply"); e.status = 400; throw e; }
+  const newStartMs = baseNextMs;            // shift E to current/derived next
+  const newNextMs = baseNextMs + stepMs;    // advance G by one more interval
 
   const rowNumber = foundIndex + 1;
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `medicationassignments!G${rowNumber}:G${rowNumber}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {values: [[nextSupply]]},
+    range: `medicationassignments!E${rowNumber}:G${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: {values: [[newStartMs, row[5] || "", newNextMs]]},
   });
 
   // Activity log
   const activityId = admin.firestore().collection("_ids").doc().id;
   const now = isoNow();
-  const details = JSON.stringify({next_supply: nextSupply});
+  const details = JSON.stringify({ start_of_supply: newStartMs, next_supply: newNextMs });
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: "activitylog!A1",
@@ -911,15 +923,15 @@ async function performMedicationService({userId, body}) {
     requestBody: {values: [[
       activityId,
       userId,
-      "perform_medication",
+      "PERFORM_MEDICATION",
       "medicationassignments",
       assignmentId,
-      givenAt,
+      now,
       details,
     ]]},
   });
 
-  return {assignment_id: assignmentId, last_given_at: givenAt, next_supply: nextSupply, updated_at: now};
+  return {assignment_id: assignmentId, start_of_supply: newStartMs, next_supply: newNextMs, updated_at: now};
 }
 
 async function createMedicationService({ userId, body }) {

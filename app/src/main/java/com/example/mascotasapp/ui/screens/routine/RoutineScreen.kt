@@ -81,6 +81,9 @@ fun RoutineScreen(
     var isDeleting by remember { mutableStateOf(false) }
     var pendingMedDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
     var isDeletingMed by remember { mutableStateOf(false) }
+    var markingMedicationId by remember { mutableStateOf<String?>(null) }
+    var completedMedDialogFor by remember { mutableStateOf<MedicationsRepository.MedicationItem?>(null) }
+    var completedMedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var markingRoutineId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -226,57 +229,72 @@ fun RoutineScreen(
                         else -> " - Every ${m.take_every_number} ${m.take_every_unit}"
                     }
                     val doseText = (m.dose.ifBlank { "" }) + freq
-                    // Compute End Date as start + (total_doses-1)*interval (supports epoch or formatted start)
-                    val endPretty = run {
+                    // Use backend-provided end_of_supply; never recompute so it doesn't move in frontend
+                    val (endPretty, endEpochForCmp) = run {
+                        val endStr = m.end_of_supply.trim()
+                        if (endStr.isEmpty()) "" to null else formatDateTimePretty(endStr) to run {
+                            try {
+                                when {
+                                    endStr.matches(Regex("^\\d+(\\.\\d+)?$")) -> {
+                                        val num = endStr.toDouble()
+                                        if (num > 1_000_000_000_000.0) num.toLong() else (num.toLong() * 1000)
+                                    }
+                                    else -> {
+                                        val dtf = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                                        java.time.LocalDateTime.parse(endStr, dtf).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                    }
+                                }
+                            } catch (_: Throwable) { null }
+                        }
+                    }
+                    // Compute start epoch for comparison
+                    val startEpochForCmp: Long? = run {
                         try {
-                            val startStr = m.start_of_medication.trim()
-                            val startEpoch: Long? = when {
-                                startStr.matches(Regex("^\\d+(\\.\\d+)?$")) -> {
-                                    val num = startStr.toDouble()
+                            val s = m.start_of_medication.trim()
+                            when {
+                                s.matches(Regex("^\\d+(\\.\\d+)?$")) -> {
+                                    val num = s.toDouble()
                                     if (num > 1_000_000_000_000.0) num.toLong() else (num.toLong() * 1000)
                                 }
                                 else -> {
                                     val dtf = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-                                    runCatching { java.time.LocalDateTime.parse(startStr, dtf).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull()
+                                    java.time.LocalDateTime.parse(s, dtf).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
                                 }
                             }
-                            val n = m.take_every_number.toLongOrNull() ?: 0L
-                            val total = m.total_doses.toLongOrNull() ?: 0L
-                            val stepMs = when (m.take_every_unit.lowercase()) {
-                                "hour", "hours" -> 60L * 60L * 1000L * n
-                                "day", "days" -> 24L * 60L * 60L * 1000L * n
-                                "week", "weeks" -> 7L * 24L * 60L * 60L * 1000L * n
-                                "month", "months" -> 30L * 24L * 60L * 60L * 1000L * n
-                                else -> 60L * 60L * 1000L * n
-                            }
-                            val endEpoch = if (startEpoch != null && n > 0 && total > 1) startEpoch + stepMs * (total - 1) else startEpoch
-                            val endFmt = if (endEpoch != null) formatDateTimePretty(endEpoch.toString()) else ""
-                            Log.d("MedUI", "item assignment=${m.assignment_id} end_epoch=${endEpoch ?: "null"} end_fmt=$endFmt")
-                            endFmt
-                        } catch (t: Throwable) { "" }
+                        } catch (_: Throwable) { null }
                     }
+                    val isLastDose = (startEpochForCmp != null && endEpochForCmp != null && startEpochForCmp >= endEpochForCmp)
+                    val nextDisplay = if (isLastDose || completedMedIds.contains(m.assignment_id)) "No next dose" else nextPretty
                     MedicationCard(
                         name = m.medication_name.ifBlank { "Medication" },
                         dose = doseText.trim(),
                         reminder = "",
                         start = startPretty,
                         end = endPretty,
-                        nextDose = nextPretty,
+                        nextDose = nextDisplay,
+                        loading = (markingMedicationId == m.medication_id),
                         onMarkDone = {
                             val pid = selectedPetId
-                            if (!pid.isNullOrBlank()) {
+                            if (!pid.isNullOrBlank() && markingMedicationId == null) {
+                                if (isLastDose) {
+                                    completedMedIds = completedMedIds + m.assignment_id
+                                    completedMedDialogFor = m
+                                    return@MedicationCard
+                                }
+                                markingMedicationId = m.medication_id
                                 scope.launch {
                                     try {
                                         MedicationsRepository.performMedication(
                                             baseUrl = ApiConfig.BASE_URL,
                                             medicationId = m.medication_id,
-                                            petId = pid,
-                                            givenAtIso = java.time.Instant.now().toString()
+                                            petId = pid
                                         )
                                         snackbarHostState.showSnackbar("Marked as done")
                                         runCatching { MedicationsRepository.refresh(ApiConfig.BASE_URL, pid) }
                                     } catch (t: Throwable) {
                                         snackbarHostState.showSnackbar(t.message ?: "Error")
+                                    } finally {
+                                        markingMedicationId = null
                                     }
                                 }
                             }
@@ -407,6 +425,17 @@ fun RoutineScreen(
             dismissButton = { TextButton(onClick = { if (!isDeletingMed) pendingMedDelete = null }, enabled = !isDeletingMed) { Text("Cancelar") } }
         )
     }
+
+    if (completedMedDialogFor != null) {
+        AlertDialog(
+            onDismissRequest = { completedMedDialogFor = null },
+            title = { Text("Medicamento completado") },
+            text = { Text("No hay próximas dosis.") },
+            confirmButton = {
+                TextButton(onClick = { completedMedDialogFor = null }) { Text("OK") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -495,6 +524,7 @@ private fun MedicationCard(
     start: String,
     end: String,
     nextDose: String,
+    loading: Boolean = false,
     onMarkDone: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -543,8 +573,19 @@ private fun MedicationCard(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp)
-                ) { Text("Mark as done") }
+                        .height(44.dp),
+                    enabled = !loading
+                ) {
+                    if (loading) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Marking...")
+                        }
+                    } else {
+                        Text("Mark as done")
+                    }
+                }
                 val danger = Color(0xFFEF4444)
                 OutlinedButton(
                     onClick = onDelete,
