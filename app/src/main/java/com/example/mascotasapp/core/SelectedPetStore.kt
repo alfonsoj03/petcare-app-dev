@@ -1,4 +1,4 @@
-package com.example.mascotasapp.core
+package com.petcare.mascotasapp.core
 
 import android.content.Context
 import android.content.SharedPreferences

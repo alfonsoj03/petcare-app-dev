@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.pets
+package com.petcare.mascotasapp.ui.screens.pets
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,10 +24,10 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.LaunchedEffect
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.core.JsonUtils
-import com.example.mascotasapp.data.repository.PetsRepository
-import com.example.mascotasapp.data.model.Pet
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.core.JsonUtils
+import com.petcare.mascotasapp.data.repository.PetsRepository
+import com.petcare.mascotasapp.data.model.Pet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

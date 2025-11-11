@@ -1,11 +1,11 @@
-package com.example.mascotasapp
+package com.petcare.mascotasapp
 
 import android.app.Application
-import com.example.mascotasapp.core.SelectedPetStore
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.data.repository.PetsRepository
-import com.example.mascotasapp.data.repository.RoutinesRepository
-import com.example.mascotasapp.data.repository.MedicationsRepository
+import com.petcare.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.data.repository.PetsRepository
+import com.petcare.mascotasapp.data.repository.RoutinesRepository
+import com.petcare.mascotasapp.data.repository.MedicationsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

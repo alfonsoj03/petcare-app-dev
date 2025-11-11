@@ -1,5 +1,5 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
-package com.example.mascotasapp.ui.screens.pets
+package com.petcare.mascotasapp.ui.screens.pets
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,10 +24,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.platform.LocalContext
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.core.SelectedPetStore
-import com.example.mascotasapp.data.repository.PetsRepository
-import com.example.mascotasapp.data.model.Pet
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.data.repository.PetsRepository
+import com.petcare.mascotasapp.data.model.Pet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -53,7 +53,6 @@ fun AddPetScreen(onBack: () -> Unit = {}, onAdd: () -> Unit = {}) {
     LaunchedEffect(Unit) {
         SelectedPetStore.init(ctx)
         val id = SelectedPetStore.get()
-        snackbarHostState.showSnackbar("Selected pet: ${id ?: "none"}")
     }
     var name by remember { mutableStateOf("") }
     var speciesExpanded by remember { mutableStateOf(false) }

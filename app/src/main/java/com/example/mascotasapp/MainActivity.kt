@@ -1,4 +1,4 @@
-package com.example.mascotasapp
+package com.petcare.mascotasapp
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -24,23 +24,23 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.mascotasapp.ui.theme.MascotasAppTheme
-import com.example.mascotasapp.ui.navigation.Destinations
-import com.example.mascotasapp.ui.screens.splash.SplashScreen
-import com.example.mascotasapp.ui.screens.dashboard.DashboardScreen
-import com.example.mascotasapp.ui.screens.health.HealthScreen
-import com.example.mascotasapp.ui.screens.health.AddVisitScreen
-import com.example.mascotasapp.ui.screens.health.RescheduleScreen
-import com.example.mascotasapp.ui.screens.health.VisitDetailsScreen
-import com.example.mascotasapp.ui.screens.health.EditVisitScreen
-import com.example.mascotasapp.ui.screens.profile.ProfileScreen
-import com.example.mascotasapp.ui.screens.routine.RoutineScreen
-import com.example.mascotasapp.ui.screens.routine.RoutineCareFormScreen
-import com.example.mascotasapp.ui.screens.routine.MedicationFormScreen
-import com.example.mascotasapp.ui.screens.pets.PetsScreen
-import com.example.mascotasapp.ui.screens.pets.AddPetScreen
-import com.example.mascotasapp.ui.screens.pets.EditPetScreen
-import com.example.mascotasapp.ui.screens.login.LoginScreen
+import com.petcare.mascotasapp.ui.theme.MascotasAppTheme
+import com.petcare.mascotasapp.ui.navigation.Destinations
+import com.petcare.mascotasapp.ui.screens.splash.SplashScreen
+import com.petcare.mascotasapp.ui.screens.dashboard.DashboardScreen
+import com.petcare.mascotasapp.ui.screens.health.HealthScreen
+import com.petcare.mascotasapp.ui.screens.health.AddVisitScreen
+import com.petcare.mascotasapp.ui.screens.health.RescheduleScreen
+import com.petcare.mascotasapp.ui.screens.health.VisitDetailsScreen
+import com.petcare.mascotasapp.ui.screens.health.EditVisitScreen
+import com.petcare.mascotasapp.ui.screens.profile.ProfileScreen
+import com.petcare.mascotasapp.ui.screens.routine.RoutineScreen
+import com.petcare.mascotasapp.ui.screens.routine.RoutineCareFormScreen
+import com.petcare.mascotasapp.ui.screens.routine.MedicationFormScreen
+import com.petcare.mascotasapp.ui.screens.pets.PetsScreen
+import com.petcare.mascotasapp.ui.screens.pets.AddPetScreen
+import com.petcare.mascotasapp.ui.screens.pets.EditPetScreen
+import com.petcare.mascotasapp.ui.screens.login.LoginScreen
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.graphics.Color
@@ -53,7 +53,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import com.example.mascotasapp.R
+import com.petcare.mascotasapp.R
 import android.util.Log
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.FirebaseApp
@@ -205,7 +205,7 @@ fun AppRoot() {
                 )
             }
             composable(Destinations.MedicationEdit.route) { backStack ->
-                val itemId = backStack.arguments?.getString(com.example.mascotasapp.ui.navigation.Destinations.MedicationEdit.ArgItemId) ?: ""
+                val itemId = backStack.arguments?.getString(com.petcare.mascotasapp.ui.navigation.Destinations.MedicationEdit.ArgItemId) ?: ""
                 MedicationFormScreen(
                     title = "Edit Medication",
                     confirmButtonText = "Save changes",
@@ -299,7 +299,7 @@ fun AppRoot() {
                 )
             }
             composable(Destinations.RoutineEdit.route) { backStack ->
-                val itemId = backStack.arguments?.getString(com.example.mascotasapp.ui.navigation.Destinations.RoutineEdit.ArgItemId) ?: ""
+                val itemId = backStack.arguments?.getString(com.petcare.mascotasapp.ui.navigation.Destinations.RoutineEdit.ArgItemId) ?: ""
                 RoutineCareFormScreen(
                     title = "Edit Routine Care",
                     confirmButtonText = "Save changes",

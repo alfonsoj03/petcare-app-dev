@@ -1,5 +1,5 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
-package com.example.mascotasapp.ui.screens.dashboard
+package com.petcare.mascotasapp.ui.screens.dashboard
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -40,7 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
-import com.example.mascotasapp.R
+import com.petcare.mascotasapp.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -48,11 +48,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalContext
-import com.example.mascotasapp.core.SelectedPetStore
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.data.repository.PetsRepository
-import com.example.mascotasapp.data.repository.MedicationsRepository
-import com.example.mascotasapp.data.repository.RoutinesRepository
+import com.petcare.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.data.repository.PetsRepository
+import com.petcare.mascotasapp.data.repository.MedicationsRepository
+import com.petcare.mascotasapp.data.repository.RoutinesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -94,7 +94,6 @@ fun DashboardScreen(
                 id = first.pet_id
             }
         }
-        snackbarHostState.showSnackbar("Selected pet: ${id ?: "none"}")
     }
     // Determine if user has pets and which one is selected
     val pets by PetsRepository.pets.collectAsStateWithLifecycle()

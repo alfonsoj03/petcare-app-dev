@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.routine
+package com.petcare.mascotasapp.ui.screens.routine
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -23,11 +23,11 @@ import androidx.compose.ui.semantics.Role
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import com.example.mascotasapp.ui.components.LabeledField
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.core.SelectedPetStore
-import com.example.mascotasapp.data.repository.PetsRepository
-import com.example.mascotasapp.data.repository.MedicationsRepository
+import com.petcare.mascotasapp.ui.components.LabeledField
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.data.repository.PetsRepository
+import com.petcare.mascotasapp.data.repository.MedicationsRepository
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

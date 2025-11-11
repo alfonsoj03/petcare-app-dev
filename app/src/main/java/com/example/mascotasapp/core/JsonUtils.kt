@@ -1,4 +1,4 @@
-package com.example.mascotasapp.core
+package com.petcare.mascotasapp.core
 
 object JsonUtils {
     // naive JSON string escaper for simple demo

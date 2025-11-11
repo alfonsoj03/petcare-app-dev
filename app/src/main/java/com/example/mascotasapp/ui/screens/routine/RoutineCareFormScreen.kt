@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.routine
+package com.petcare.mascotasapp.ui.screens.routine
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,11 +17,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.core.SelectedPetStore
-import com.example.mascotasapp.core.JsonUtils
-import com.example.mascotasapp.data.repository.RoutinesRepository
-import com.example.mascotasapp.ui.components.LabeledField
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.core.JsonUtils
+import com.petcare.mascotasapp.data.repository.RoutinesRepository
+import com.petcare.mascotasapp.ui.components.LabeledField
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL

@@ -1,4 +1,4 @@
-package com.example.mascotasapp
+package com.petcare.mascotasapp
 
 import org.junit.Test
 

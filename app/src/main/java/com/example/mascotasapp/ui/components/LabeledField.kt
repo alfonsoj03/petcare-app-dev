@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.components
+package com.petcare.mascotasapp.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*

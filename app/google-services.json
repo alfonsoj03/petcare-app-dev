@@ -22,6 +22,43 @@
           }
         },
         {
+          "client_id": "495773138295-ohl1hgp9mgh0aunmeger7uq503q43q3u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mascotasapp",
+            "certificate_hash": "9e1deede4453275e495e0b2a5ab43ab6bab94057"
+          }
+        },
+        {
+          "client_id": "495773138295-8ptlbicbmca24usqug1jo3en9svk2rho.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNoAZJU3EUPM5t-DCQ78bD5_Lj_sEIfmc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "495773138295-8ptlbicbmca24usqug1jo3en9svk2rho.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:495773138295:android:126f8aa6e26831574ef572",
+        "android_client_info": {
+          "package_name": "com.petcare.mascotasapp"
+        }
+      },
+      "oauth_client": [
+        {
           "client_id": "495773138295-8ptlbicbmca24usqug1jo3en9svk2rho.apps.googleusercontent.com",
           "client_type": 3
         }

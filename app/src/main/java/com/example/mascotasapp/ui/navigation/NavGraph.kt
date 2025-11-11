@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.navigation
+package com.petcare.mascotasapp.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite

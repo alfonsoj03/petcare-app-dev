@@ -1,14 +1,14 @@
-package com.example.mascotasapp.ui.screens.routine
+package com.petcare.mascotasapp.ui.screens.routine
 
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.core.SelectedPetStore
-import com.example.mascotasapp.data.model.Pet
-import com.example.mascotasapp.data.repository.PetsRepository
-import com.example.mascotasapp.data.repository.RoutinesRepository
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.data.model.Pet
+import com.petcare.mascotasapp.data.repository.PetsRepository
+import com.petcare.mascotasapp.data.repository.RoutinesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

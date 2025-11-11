@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.routine
+package com.petcare.mascotasapp.ui.screens.routine
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -26,9 +26,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import com.example.mascotasapp.data.repository.RoutinesRepository
-import com.example.mascotasapp.data.repository.MedicationsRepository
-import com.example.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.data.repository.RoutinesRepository
+import com.petcare.mascotasapp.data.repository.MedicationsRepository
+import com.petcare.mascotasapp.core.SelectedPetStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.Instant
 import java.time.LocalDate
@@ -42,7 +42,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarDuration
 import kotlinx.coroutines.launch
-import com.example.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.core.ApiConfig
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.ViewModel

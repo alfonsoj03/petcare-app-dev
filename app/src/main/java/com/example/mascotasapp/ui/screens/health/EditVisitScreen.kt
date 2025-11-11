@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.health
+package com.petcare.mascotasapp.ui.screens.health
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*

@@ -415,13 +415,29 @@ exports.createMedication = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, 
   }
 });
 
-// GET /pets — list all pets (demo: no auth required)
+// GET /pets — list all pets for the authenticated user
 exports.getPets = onRequest({cors: true, secrets: ["SPREADSHEET_ID"]}, async (req, res) => {
   try {
     if (req.method !== "GET") {
       return res.status(405).json({error: "Method Not Allowed"});
     }
-    const out = await getPetsService();
+    // Auth (supports emulator bypass)
+    let userId;
+    const allowBypass = process.env.ALLOW_INSECURE_EMULATOR === "1";
+    if (allowBypass) {
+      userId = (req.headers["x-debug-uid"] || req.headers["X-Debug-Uid"] || "dev-user") + "";
+    } else {
+      const token = bearer(req);
+      if (!token) return res.status(401).json({error: "Missing Bearer token"});
+      let decoded;
+      try {
+        decoded = await admin.auth().verifyIdToken(token);
+      } catch (err) {
+        return res.status(401).json({error: "Invalid token"});
+      }
+      userId = decoded.uid;
+    }
+    const out = await getPetsService({userId});
     return res.json(out);
   } catch (err) {
     const code = err.status || 500;

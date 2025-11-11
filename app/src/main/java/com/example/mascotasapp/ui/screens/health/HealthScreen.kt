@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.health
+package com.petcare.mascotasapp.ui.screens.health
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -73,7 +73,7 @@ fun HealthScreen(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Image(painter = painterResource(id = com.example.mascotasapp.R.drawable.sonrisa), contentDescription = null, modifier = Modifier.size(140.dp))
+                Image(painter = painterResource(id = com.petcare.mascotasapp.R.drawable.sonrisa), contentDescription = null, modifier = Modifier.size(140.dp))
                 Text("¡See You Soon!", style = MaterialTheme.typography.titleMedium, color = Color(0xFF111827))
             }
         }

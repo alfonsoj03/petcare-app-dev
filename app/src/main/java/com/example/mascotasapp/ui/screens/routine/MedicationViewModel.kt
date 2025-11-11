@@ -1,8 +1,8 @@
-package com.example.mascotasapp.ui.screens.routine
+package com.petcare.mascotasapp.ui.screens.routine
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mascotasapp.data.repository.MedicationsRepository
+import com.petcare.mascotasapp.data.repository.MedicationsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

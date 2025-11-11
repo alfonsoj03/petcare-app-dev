@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.mascotasapp"
+    namespace = "com.petcare.mascotasapp"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.mascotasapp"
+        applicationId = "com.petcare.mascotasapp"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

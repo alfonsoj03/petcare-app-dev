@@ -1,8 +1,8 @@
-package com.example.mascotasapp.data.repository
+package com.petcare.mascotasapp.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.example.mascotasapp.data.model.Pet
+import com.petcare.mascotasapp.data.model.Pet
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray

@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.profile
+package com.petcare.mascotasapp.ui.screens.profile
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -21,11 +21,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.mascotasapp.R
+import com.petcare.mascotasapp.R
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import com.google.firebase.auth.FirebaseAuth
-import com.example.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.core.SelectedPetStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

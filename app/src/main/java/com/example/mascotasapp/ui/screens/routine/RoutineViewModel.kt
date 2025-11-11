@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.routine
+package com.petcare.mascotasapp.ui.screens.routine
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -7,7 +7,7 @@ import androidx.lifecycle.ViewModel
 import java.time.Duration
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import com.example.mascotasapp.data.repository.RoutinesRepository
+import com.petcare.mascotasapp.data.repository.RoutinesRepository
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

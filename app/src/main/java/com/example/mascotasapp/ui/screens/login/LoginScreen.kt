@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.login
+package com.petcare.mascotasapp.ui.screens.login
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -19,11 +19,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
-import com.example.mascotasapp.R
+import com.petcare.mascotasapp.R
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
-import com.example.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.core.ApiConfig
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions

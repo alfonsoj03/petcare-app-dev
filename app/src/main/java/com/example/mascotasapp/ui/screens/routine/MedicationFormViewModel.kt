@@ -1,11 +1,11 @@
-package com.example.mascotasapp.ui.screens.routine
+package com.petcare.mascotasapp.ui.screens.routine
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.core.SelectedPetStore
-import com.example.mascotasapp.data.repository.MedicationsRepository
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.data.repository.MedicationsRepository
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.Duration

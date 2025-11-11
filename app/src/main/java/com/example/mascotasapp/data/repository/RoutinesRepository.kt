@@ -1,4 +1,4 @@
-package com.example.mascotasapp.data.repository
+package com.petcare.mascotasapp.data.repository
 
 import android.util.Log
 import android.content.Context

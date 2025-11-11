@@ -1,5 +1,5 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
-package com.example.mascotasapp.ui.screens.pets
+package com.petcare.mascotasapp.ui.screens.pets
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -44,20 +44,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import com.example.mascotasapp.R
+import com.petcare.mascotasapp.R
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
-import com.example.mascotasapp.core.ApiConfig
-import com.example.mascotasapp.data.repository.PetsRepository
-import com.example.mascotasapp.data.model.Pet
+import com.petcare.mascotasapp.core.ApiConfig
+import com.petcare.mascotasapp.data.repository.PetsRepository
+import com.petcare.mascotasapp.data.model.Pet
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
-import com.example.mascotasapp.core.SelectedPetStore
-import com.example.mascotasapp.data.repository.MedicationsRepository
-import com.example.mascotasapp.data.repository.RoutinesRepository
+import com.petcare.mascotasapp.core.SelectedPetStore
+import com.petcare.mascotasapp.data.repository.MedicationsRepository
+import com.petcare.mascotasapp.data.repository.RoutinesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,7 +66,7 @@ import androidx.compose.runtime.getValue
 
 enum class EventType { VACCINE, VET, OVERDUE }
 
-private fun com.example.mascotasapp.data.model.Pet.toExtended(): PetExtended {
+private fun com.petcare.mascotasapp.data.model.Pet.toExtended(): PetExtended {
     val dob = this.date_of_birth
     val ageY = safeYearsFromDob(dob)
     return PetExtended(

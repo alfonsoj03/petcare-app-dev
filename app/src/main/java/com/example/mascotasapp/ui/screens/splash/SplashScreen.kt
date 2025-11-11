@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.screens.splash
+package com.petcare.mascotasapp.ui.screens.splash
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

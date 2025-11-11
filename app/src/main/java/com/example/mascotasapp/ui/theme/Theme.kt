@@ -1,4 +1,4 @@
-package com.example.mascotasapp.ui.theme
+package com.petcare.mascotasapp.ui.theme
 
 import android.app.Activity
 import android.os.Build

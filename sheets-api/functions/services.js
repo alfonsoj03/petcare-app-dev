@@ -1453,7 +1453,7 @@ async function performRoutineService({userId, body}) {
   return {assignment_id: assignmentId, last_performed_at: newLastMs, next_activity: newNextMs, updated_at: now};
 }
 
-async function getPetsService() {
+async function getPetsService({userId}) {
   const spreadsheetId = ensureSpreadsheetId();
   const sheets = await getSheetsClient();
   const r = await sheets.spreadsheets.values.get({
@@ -1464,7 +1464,7 @@ async function getPetsService() {
   });
   const rows = r.data.values || [];
   if (rows.length <= 1) return [];
-  const out = rows.slice(1).map(cols => ({
+  const allPets = rows.slice(1).map(cols => ({
     pet_id: cols[0] || "",
     user_id: cols[1] || "",
     name: cols[2] || "",
@@ -1477,6 +1477,8 @@ async function getPetsService() {
     color: cols[9] || "",
     created_at: cols[10] || "",
   }));
+  // Filtrar por userId
+  const out = allPets.filter(pet => pet.user_id === userId);
   return out;
 }
 
