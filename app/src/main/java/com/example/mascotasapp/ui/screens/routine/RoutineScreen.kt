@@ -264,7 +264,7 @@ fun RoutineScreen(
                         } catch (_: Throwable) { null }
                     }
                     val isLastDose = (startEpochForCmp != null && endEpochForCmp != null && startEpochForCmp >= endEpochForCmp)
-                    val nextDisplay = if (isLastDose || completedMedIds.contains(m.assignment_id)) "No next dose" else nextPretty
+                    val nextDisplay = if (isLastDose || completedMedIds.contains(m.assignment_id)) "Medication completed, no upcoming doses" else nextPretty
                     MedicationCard(
                         name = m.medication_name.ifBlank { "Medication" },
                         dose = doseText.trim(),
