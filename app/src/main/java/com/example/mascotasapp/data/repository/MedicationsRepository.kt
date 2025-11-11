@@ -38,6 +38,7 @@ object MedicationsRepository {
         val created_at: String,
         val total_doses: String = "",
         val end_of_supply: String = "",
+        val is_completed: Boolean = false,
     )
 
     private lateinit var prefs: SharedPreferences
@@ -93,7 +94,8 @@ object MedicationsRepository {
         }
         Log.d(TAG, "refresh: http 200, bodyLength=${resp.length}")
         val arr = JSONArray(resp)
-            val list = parseJsonArray(arr).sortedBy { parseDate(it.next_dose) }
+            val list = parseJsonArray(arr)
+                .sortedWith(compareBy<MedicationItem> { it.is_completed }.thenBy { parseDate(it.next_dose) })
             Log.d(TAG, "refresh: parsed ${list.size} items for pet=$petId")
             list.forEach {
                 Log.d(
@@ -113,7 +115,7 @@ object MedicationsRepository {
         val current = flow.value.toMutableList()
         val idx = current.indexOfFirst { it.assignment_id == item.assignment_id }
         if (idx >= 0) current[idx] = item else current.add(item)
-        val sorted = current.sortedBy { parseDate(it.next_dose) }
+        val sorted = current.sortedWith(compareBy<MedicationItem> { it.is_completed }.thenBy { parseDate(it.next_dose) })
         flow.value = sorted
         Log.d(TAG, "upsert: new size=${sorted.size} for pet=$petId")
         saveCache(petId, JSONArray(sorted.map { toJson(it) }).toString())
@@ -175,6 +177,11 @@ object MedicationsRepository {
             val everyUnit = o.optString("take_every_unit")
             val nextStr = o.optString("next_dose")
             val endStr = o.optString("end_of_supply")
+            val completed = when {
+                o.has("is_completed") -> o.optBoolean("is_completed")
+                o.has("isCompleted") -> o.optBoolean("isCompleted")
+                else -> false
+            }
             val nextFinal = if (nextStr.isNotBlank()) normalizeDateStr(nextStr) else computeNext(startStr, lastStr, everyNum, everyUnit)
             val endFinal = normalizeDateStr(endStr)
             out.add(
@@ -193,6 +200,7 @@ object MedicationsRepository {
                     created_at = o.optString("created_at"),
                     total_doses = o.optString("total_doses"),
                     end_of_supply = endFinal,
+                    is_completed = completed,
                 )
             )
         }
@@ -215,6 +223,7 @@ object MedicationsRepository {
         put("created_at", it.created_at)
         put("total_doses", it.total_doses)
         put("end_of_supply", it.end_of_supply)
+        put("is_completed", it.is_completed)
     }
 
     private val dtf: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
@@ -323,6 +332,11 @@ object MedicationsRepository {
         val totalResp = obj.optString("total_doses")
         val nextRaw = obj.optString("next_dose")
         val endRaw = obj.optString("end_of_supply")
+        val completedResp = when {
+            obj.has("is_completed") -> obj.optBoolean("is_completed")
+            obj.has("isCompleted") -> obj.optBoolean("isCompleted")
+            else -> false
+        }
         val nextComputed = if (nextRaw.isNotBlank()) normalizeDateStr(nextRaw) else computeNext(startStrResp, lastStrResp, everyNumResp, everyUnitResp)
         val endComputed = normalizeDateStr(endRaw)
         val item = MedicationItem(
@@ -340,6 +354,7 @@ object MedicationsRepository {
             created_at = obj.optString("created_at"),
             total_doses = totalResp,
             end_of_supply = endComputed,
+            is_completed = completedResp,
         )
         Log.d(
             TAG,
@@ -379,6 +394,11 @@ object MedicationsRepository {
         val totalUpd = obj.optString("total_doses")
         val nextRawUpd = obj.optString("next_dose")
         val endRawUpd = obj.optString("end_of_supply")
+        val completedUpd = when {
+            obj.has("is_completed") -> obj.optBoolean("is_completed")
+            obj.has("isCompleted") -> obj.optBoolean("isCompleted")
+            else -> false
+        }
         val nextUpd = if (nextRawUpd.isNotBlank()) normalizeDateStr(nextRawUpd) else computeNext(startStrUpd, lastStrUpd, everyNumUpd, everyUnitUpd)
         val endUpd = normalizeDateStr(endRawUpd)
         val item = MedicationItem(
@@ -395,7 +415,8 @@ object MedicationsRepository {
             next_dose = nextUpd,
             created_at = obj.optString("created_at"),
             total_doses = totalUpd,
-            end_of_supply = endUpd
+            end_of_supply = endUpd,
+            is_completed = completedUpd
         )
         upsert(petId, item)
         return item
