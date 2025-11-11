@@ -817,14 +817,14 @@ async function getPetNextEventsService({userId, petId, limit}) {
   return merged;
 }
 
-async function performMedicationService({userId, body}) {
+async function performMedicationService({ userId, body }) {
   const medicationId = required(body.medication_id || body.med_id || body.id, "medication_id");
   const petId = required(body.pet_id, "pet_id");
 
   const spreadsheetId = ensureSpreadsheetId();
   const sheets = await getSheetsClient();
 
-  // Read medications: A id, B user_id, C name, D start_of_supply, E number, F unit, G dose_number, H dose_unit, I total_doses, J created_at
+  // --- 1. Leer tabla medications ---
   const medsResp = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: "medications!A1:Z10000",
@@ -837,12 +837,14 @@ async function performMedicationService({userId, body}) {
     e.status = 404;
     throw e;
   }
+
   const medRow = mrows.find((cols, idx) => idx > 0 && String(cols[0]) === medicationId && String(cols[1]) === userId);
   if (!medRow) {
     const e = new Error("Medication not found");
     e.status = 404;
     throw e;
   }
+
   const everyNum = Number(medRow[4]);
   const everyUnit = String(medRow[5] || "");
   if (!Number.isFinite(everyNum) || !everyUnit) {
@@ -851,7 +853,7 @@ async function performMedicationService({userId, body}) {
     throw e;
   }
 
-  // Find assignment row by medication_id + pet_id + user_id
+  // --- 2. Leer assignments ---
   const maResp = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: "medicationassignments!A1:Z10000",
@@ -864,7 +866,8 @@ async function performMedicationService({userId, body}) {
     e.status = 404;
     throw e;
   }
-  // columns (current): A assignment_id, B medication_id, C pet_id, D user_id, E start_of_supply, F end_of_supply, G next_supply, H created_at, I is_completed
+
+  // columnas: A assignment_id, B medication_id, C pet_id, D user_id, E start_of_supply, F end_of_supply, G next_supply, H created_at, I is_completed
   let foundIndex = -1;
   let assignmentId = "";
   for (let i = 1; i < arows.length; i++) {
@@ -875,17 +878,21 @@ async function performMedicationService({userId, body}) {
       break;
     }
   }
+
   if (foundIndex === -1) {
     const e = new Error("Assignment not found");
     e.status = 404;
     throw e;
   }
 
-  // Read current next_supply (G). If missing, derive as start_of_supply (E) + one step.
+  // --- 3. Cálculos de fechas ---
   const row = arows[foundIndex];
   const startMsRaw = row[4];
+  const endMsRaw = row[5];
   const nextMsRaw = row[6];
+
   const startMs = Number(startMsRaw);
+  const endMs = Number(endMsRaw);
   const nFromG = Number(nextMsRaw);
 
   const hourMs = 60 * 60 * 1000;
@@ -893,45 +900,78 @@ async function performMedicationService({userId, body}) {
   const weekMs = 7 * dayMs;
   const unitLower = String(everyUnit || "").toLowerCase();
   const nInt = Number(everyNum) | 0;
-  const stepMs = (unitLower === "hour" || unitLower === "hours") ? nInt * hourMs
-                : (unitLower === "day" || unitLower === "days") ? nInt * dayMs
-                : (unitLower === "week" || unitLower === "weeks") ? nInt * weekMs
-                : /* month(s) */ nInt * 30 * dayMs;
 
-  const baseNextMs = Number.isFinite(nFromG) ? nFromG : (Number.isFinite(startMs) ? (startMs + stepMs) : NaN);
-  if (!Number.isFinite(baseNextMs)) { const e = new Error("Cannot derive next_supply"); e.status = 400; throw e; }
-  const newStartMs = baseNextMs;            // shift E to current/derived next
-  const newNextMs = baseNextMs + stepMs;    // advance G by one more interval
+  const stepMs =
+    unitLower === "hour" || unitLower === "hours"
+      ? nInt * hourMs
+      : unitLower === "day" || unitLower === "days"
+      ? nInt * dayMs
+      : unitLower === "week" || unitLower === "weeks"
+      ? nInt * weekMs
+      : nInt * 30 * dayMs; // default month-based step
 
+  const baseNextMs = Number.isFinite(nFromG)
+    ? nFromG
+    : Number.isFinite(startMs)
+    ? startMs + stepMs
+    : NaN;
+
+  if (!Number.isFinite(baseNextMs)) {
+    const e = new Error("Cannot derive next_supply");
+    e.status = 400;
+    throw e;
+  }
+
+  // --- 4. Calcular nuevas fechas ---
+  const newStartMs = baseNextMs;
+  const newNextMs = baseNextMs + stepMs;
+
+  // --- 5. Determinar si el tratamiento ya terminó ---
+  let isCompleted = false;
+  if (Number.isFinite(endMs) && newStartMs >= endMs) {
+    isCompleted = true;
+  }
+
+  // --- 6. Actualizar fila en Sheets ---
   const rowNumber = foundIndex + 1;
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `medicationassignments!E${rowNumber}:G${rowNumber}`,
+    range: `medicationassignments!E${rowNumber}:I${rowNumber}`,
     valueInputOption: "RAW",
-    requestBody: {values: [[newStartMs, row[5] || "", newNextMs]]},
+    requestBody: {
+      values: [[newStartMs, endMsRaw || "", newNextMs, row[7] || "", isCompleted]],
+    },
   });
 
-  // Activity log
+  // --- 7. Registrar actividad ---
   const activityId = admin.firestore().collection("_ids").doc().id;
   const now = isoNow();
-  const details = JSON.stringify({ start_of_supply: newStartMs, next_supply: newNextMs });
+  const details = JSON.stringify({
+    start_of_supply: newStartMs,
+    next_supply: newNextMs,
+    is_completed: isCompleted,
+  });
+
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: "activitylog!A1",
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
-    requestBody: {values: [[
-      activityId,
-      userId,
-      "PERFORM_MEDICATION",
-      "medicationassignments",
-      assignmentId,
-      now,
-      details,
-    ]]},
+    requestBody: {
+      values: [
+        [activityId, userId, "PERFORM_MEDICATION", "medicationassignments", assignmentId, now, details],
+      ],
+    },
   });
 
-  return {assignment_id: assignmentId, start_of_supply: newStartMs, next_supply: newNextMs, updated_at: now};
+  // --- 8. Retornar resultado actualizado ---
+  return {
+    assignment_id: assignmentId,
+    start_of_supply: newStartMs,
+    next_supply: newNextMs,
+    is_completed: isCompleted,
+    updated_at: now,
+  };
 }
 
 async function createMedicationService({ userId, body }) {
