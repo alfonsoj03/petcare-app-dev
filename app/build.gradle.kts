@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.mascotasapp"
+    namespace = "com.petcare.mascotasapp"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.mascotasapp"
+        applicationId = "com.petcare.mascotasapp"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -28,13 +28,16 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }
+
     buildFeatures {
         compose = true
     }
@@ -51,13 +54,18 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-ripple")
-    // Coil for image handling (core + Compose integration)
+
+    // Coil para manejo de imágenes
     implementation(libs.coil)
     implementation(libs.coil.compose)
+
     // Navigation Compose
     implementation(libs.androidx.navigation.compose)
-    // Material Icons Extended (for bottom bar icons)
+
+    // Material Icons Extended
     implementation(libs.androidx.compose.material.icons.extended)
+
+    // Tests
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -66,7 +74,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-    // Firebase: use BOM to manage versions and depend on KTX artifacts only
+    // Firebase (usando BOM para versiones)
     implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")

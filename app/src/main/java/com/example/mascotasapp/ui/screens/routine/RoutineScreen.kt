@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
@@ -142,6 +143,42 @@ fun RoutineScreen(
             }
         }
 
+        // Precompute sorted medications in a @Composable context
+        val sortedMeds = remember(medications, completedMedIds) {
+            medications.sortedBy { m ->
+                val endStr = m.end_of_supply.trim()
+                val endEpoch: Long? = try {
+                    when {
+                        endStr.isEmpty() -> null
+                        endStr.matches(Regex("^\\d+(\\.\\d+)?$")) -> {
+                            val num = endStr.toDouble()
+                            if (num > 1_000_000_000_000.0) num.toLong() else (num.toLong() * 1000)
+                        }
+                        else -> {
+                            val dtf = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                            java.time.LocalDateTime.parse(endStr, dtf).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                        }
+                    }
+                } catch (_: Throwable) { null }
+                val startEpoch: Long? = try {
+                    val s = m.start_of_medication.trim()
+                    when {
+                        s.matches(Regex("^\\d+(\\.\\d+)?$")) -> {
+                            val num = s.toDouble()
+                            if (num > 1_000_000_000_000.0) num.toLong() else (num.toLong() * 1000)
+                        }
+                        else -> {
+                            val dtf = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                            java.time.LocalDateTime.parse(s, dtf).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                        }
+                    }
+                } catch (_: Throwable) { null }
+                val isLast = (startEpoch != null && endEpoch != null && startEpoch >= endEpoch)
+                val completed = m.is_completed || completedMedIds.contains(m.assignment_id) || isLast
+                completed
+            }
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -218,8 +255,8 @@ fun RoutineScreen(
                     )
                 }
             }
-            if (medications.isNotEmpty()) {
-                items(medications, key = { it.assignment_id }) { m ->
+            if (sortedMeds.isNotEmpty()) {
+                items(sortedMeds, key = { it.assignment_id }) { m ->
                     Log.d("MedUI", "item assignment=${m.assignment_id} start_raw=${m.start_of_medication} next_raw=${m.next_dose} take_every=${m.take_every_number} ${m.take_every_unit} total=${m.total_doses}")
                     val startPretty = formatDateTimePretty(m.start_of_medication)
                     val nextPretty = formatDateTimePretty(m.next_dose)
@@ -264,7 +301,8 @@ fun RoutineScreen(
                         } catch (_: Throwable) { null }
                     }
                     val isLastDose = (startEpochForCmp != null && endEpochForCmp != null && startEpochForCmp >= endEpochForCmp)
-                    val nextDisplay = if (isLastDose || completedMedIds.contains(m.assignment_id)) "Medication completed, no upcoming doses" else nextPretty
+                    val isCompleted = m.is_completed || completedMedIds.contains(m.assignment_id) || isLastDose
+                    val nextDisplay = if (isCompleted) "Medication completed, no upcoming doses" else nextPretty
                     MedicationCard(
                         name = m.medication_name.ifBlank { "Medication" },
                         dose = doseText.trim(),
@@ -273,6 +311,7 @@ fun RoutineScreen(
                         end = endPretty,
                         nextDose = nextDisplay,
                         loading = (markingMedicationId == m.medication_id),
+                        enabled = !isCompleted,
                         onMarkDone = {
                             val pid = selectedPetId
                             if (!pid.isNullOrBlank() && markingMedicationId == null) {
@@ -525,6 +564,7 @@ private fun MedicationCard(
     end: String,
     nextDose: String,
     loading: Boolean = false,
+    enabled: Boolean = true,
     onMarkDone: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -533,7 +573,13 @@ private fun MedicationCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .alpha(if (enabled) 1f else 0.5f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -574,7 +620,7 @@ private fun MedicationCard(
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp),
-                    enabled = !loading
+                    enabled = enabled && !loading
                 ) {
                     if (loading) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -597,7 +643,8 @@ private fun MedicationCard(
                     ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp)
+                        .height(44.dp),
+                    enabled = enabled
                 ) { Text("Delete") }
             }
             Text("Next dose: $nextDose", style = MaterialTheme.typography.bodySmall, color = Color.Black)
